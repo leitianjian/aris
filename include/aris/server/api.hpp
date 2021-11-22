@@ -24,7 +24,7 @@ namespace aris::server
 		{
 			auto cut_str = [](std::string_view &input, const char *c)->std::string_view
 			{
-				// ´ËÊ±cÖÐ×Ö·ûÊÇ»òµÄ¹ØÏµ //
+				// ï¿½ï¿½Ê±cï¿½ï¿½ï¿½Ö·ï¿½ï¿½Ç»ï¿½Ä¹ï¿½Ïµ //
 				auto point = input.find_first_of(c);
 				auto ret = input.substr(0, point);
 				input = point == std::string::npos ? std::string_view() : input.substr(point);
@@ -107,7 +107,7 @@ namespace aris::server
 						str = str.substr(equal.size() + 1);
 						std::string value = str;
 
-						// È¥µôÇ°×º //
+						// È¥ï¿½ï¿½Ç°×º //
 						name = name.substr(name.find_first_of(".") + 1);
 						cal.addVariable(name, type, value);
 
@@ -306,7 +306,7 @@ namespace aris::server
 						auto field = pro_doc.NewElement("field");
 						field->SetAttribute("name", "func_name");
 
-						// ÒÔÏÂÌæ´úµôÇ°×º //
+						// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°×º //
 						//auto program_prefix = program.filename().stem().string() + ".";
 						//auto index = word.find(program_prefix, 0);
 						//if (index != std::string::npos) word.replace(index, program_prefix.size(), "");
@@ -351,7 +351,7 @@ namespace aris::server
 								field->SetAttribute("name", std::string(param.first).c_str());
 								std::string value = std::string(param.second);
 
-								// ÒÔÏÂÌæ´úµôÇ°×º //
+								// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°×º //
 								//auto program_prefix = program.filename().stem().string() + ".";
 								//auto index = value.find(program_prefix, 0);
 								//if (index != std::string::npos) value.replace(index, program_prefix.size(), "");
@@ -555,6 +555,7 @@ namespace aris::server
 
 	auto ARIS_API fetchObjPictureList()->std::string;
 	auto ARIS_API postObjPicture(std::string str)->std::string;
+	auto ARIS_API fetch3dModelData(std::string path)->std::vector<char>;
 }
 
 #endif

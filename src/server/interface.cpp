@@ -678,6 +678,21 @@ namespace aris::server
 						mg_send(nc, ret.c_str(), (int)ret.size());
 						break;
 					}
+					else if (method == "GET" && uri.size() > 13 && uri.substr(0, 13) == "/RobotGallery")
+					{
+						auto ret = fetch3dModelData(uri.substr(14));
+
+						mg_printf(nc,
+							"HTTP/1.1 200 OK\r\n"
+							"Content-Type: application/octet-stream\r\n"
+							"Content-Length: %ld\r\n\r\n",
+							ret.size()
+						);
+						std::cout << ret.size() << std::endl;
+
+						mg_send(nc, &ret[0], ret.size());
+						break;
+					}
 					else
 					{
 						mg_serve_http(nc, hm, reinterpret_cast<Imp*>(nc->user_data)->s_http_server_opts);
