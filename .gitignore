@@ -42,5 +42,9 @@ install_manifest.txt
 *.out
 *.app
 
+/.vs
+/out
+/CMakeSettings.json
+
 .vscode/
 build/
