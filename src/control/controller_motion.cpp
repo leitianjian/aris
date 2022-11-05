@@ -86,10 +86,59 @@ namespace aris::control{
 	DigitalIo::DigitalIo(const DigitalIo &other) = default;
 	DigitalIo& DigitalIo::operator=(const DigitalIo &other) = default;
 
+	struct SensorBase::Imp
+	{
+		std::string name_;
+		std::string description_;
+		bool activate_;
+		bool is_virtual_;
+		aris::Size frequency_;
+		std::function<SensorData* ()> sensor_data_ctor_;
+	};
+	auto SensorBase::isVirtual() const -> bool {
+		return imp_->is_virtual_;
+	}
+	auto SensorBase::setVirtual(bool is_virtual) -> void {
+		imp_->is_virtual_ = is_virtual;
+	}
+	auto SensorBase::activate() const -> bool {
+		return imp_->activate_;
+	}
+	auto SensorBase::setActivate(bool is_activate) -> void {
+		imp_->activate_ = is_activate;
+	}
+	auto SensorBase::frequency() const -> aris::Size {
+		return imp_->frequency_;
+	}
+	auto SensorBase::setFrequency(aris::Size frequency) -> void {
+		imp_->frequency_ = frequency;
+	}
+	auto SensorBase::name() -> std::string& {
+		return imp_->name_;
+	}
+	auto SensorBase::description() -> std::string& {
+		return imp_->description_;
+	}
+	SensorBase::~SensorBase() = default;
+	SensorBase::SensorBase(std::function<SensorData* ()> sensor_data_ctor,
+												 const std::string& name, 
+												 const std::string& desc, 
+		                     bool is_virtual, 
+		                     bool activate,
+												 aris::Size frequency) : imp_(new Imp) {
+		imp_->sensor_data_ctor_ = sensor_data_ctor;
+		imp_->name_ = name;
+		imp_->description_ = desc;
+		imp_->activate_ = activate;
+		imp_->is_virtual_ = is_virtual;
+		imp_->frequency_ = frequency;
+	}
+
 	struct Controller::Imp { 
 		std::unique_ptr<aris::core::PointerArray<Motor>> motor_pool_{ new aris::core::PointerArray<Motor> };
 		std::unique_ptr<aris::core::PointerArray<DigitalIo>> digital_io_pool_{ new aris::core::PointerArray<DigitalIo> };
 		std::unique_ptr<aris::core::PointerArray<FtSensor>> ft_sensor_pool_{ new aris::core::PointerArray<FtSensor> };
+		std::unique_ptr<aris::core::PointerArray<SensorBase>> sensor_pool_{ new aris::core::PointerArray<SensorBase> };
 	};
 	auto Controller::resetMotorPool(aris::core::PointerArray<Motor> *pool) { imp_->motor_pool_.reset(pool); }
 	auto Controller::motorPool()->aris::core::PointerArray<Motor>& { return *imp_->motor_pool_; }
@@ -97,6 +146,8 @@ namespace aris::control{
 	auto Controller::digitalIoPool()->aris::core::PointerArray<DigitalIo>& { return *imp_->digital_io_pool_; }
 	auto Controller::resetFtSensorPool(aris::core::PointerArray<FtSensor> *pool) { imp_->ft_sensor_pool_.reset(pool); }
 	auto Controller::ftSensorPool()->aris::core::PointerArray<FtSensor>& { return *imp_->ft_sensor_pool_; }
+	auto Controller::resetSensorPool(aris::core::PointerArray<SensorBase> *pool) -> void { imp_->sensor_pool_.reset(pool); }
+	auto Controller::sensorPool()->aris::core::PointerArray<SensorBase>& { return *imp_->sensor_pool_; }
 	auto Controller::init()->void{}
 	Controller::~Controller() = default;
 	Controller::Controller(const std::string &name) :imp_(new Imp) {}
@@ -122,6 +173,13 @@ namespace aris::control{
 			.prop("num_of_do", &DigitalIo::setNumOfDo, &DigitalIo::numOfDo)
 			;
 
+		aris::core::class_<SensorBase>("SensorBase")
+			.prop("name", &SensorBase::name)
+			.prop("desc", &SensorBase::description)
+			.prop("activate", &SensorBase::setActivate, &SensorBase::activate)
+			.prop("is_virtual", &SensorBase::setVirtual, &SensorBase::isVirtual)
+			.prop("frequency", &SensorBase::setFrequency, &SensorBase::frequency)
+			;
 		aris::core::class_<FtSensor>("FtSensor")
 			;
 
@@ -134,13 +192,18 @@ namespace aris::control{
 		aris::core::class_<aris::core::PointerArray<FtSensor>>("FtSensorPoolObject")
 			.asRefArray();
 
+		aris::core::class_<aris::core::PointerArray<SensorBase>>("SensorPoolObject")
+			.asRefArray();
+
 		typedef aris::core::PointerArray<Motor>&(Controller::*MotorPoolFunc)();
 		typedef aris::core::PointerArray<DigitalIo>&(Controller::*DigitalIoPoolFunc)();
 		typedef aris::core::PointerArray<FtSensor>&(Controller::*FtSensorPoolFunc)();
+		typedef aris::core::PointerArray<SensorBase>&(Controller::*SensorPoolFunc)();
 		aris::core::class_<Controller>("Controller")
 			.prop("motor_pool", &Controller::resetMotorPool, MotorPoolFunc(&Controller::motorPool))
 			.prop("digital_io_pool", &Controller::resetDigitalIoPool, DigitalIoPoolFunc(&Controller::digitalIoPool))
 			.prop("ft_sensor_pool", &Controller::resetFtSensorPool, FtSensorPoolFunc(&Controller::ftSensorPool))
+			.prop("sensor_pool", &Controller::resetSensorPool, SensorPoolFunc(&Controller::sensorPool))
 			;
 	}
 }

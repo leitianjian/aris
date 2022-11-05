@@ -258,7 +258,7 @@ namespace aris::server{
 		// plans //
 		template<typename T = aris::plan::PlanRoot, typename... Args>
 		auto makePlanRoot(Args&&... args)noexcept->void { this->resetPlanRoot(new T(std::forward<Args>(args)...)); }
-		auto resetPlanRoot(plan::PlanRoot *sensor_root)->void;
+		auto resetPlanRoot(plan::PlanRoot *plan_root)->void;
 		auto planRoot()->plan::PlanRoot&;
 		auto planRoot()const ->const plan::PlanRoot& { return const_cast<ControlServer *>(this)->planRoot(); }
 
