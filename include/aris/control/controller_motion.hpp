@@ -119,6 +119,42 @@ namespace aris::control{
 		virtual auto getFtData(double *data_address)->void = 0;
 	};
 
+	struct ARIS_API SensorData {
+		virtual ~SensorData() = default;
+		SensorData() = default;
+	};
+
+	class ARIS_API SensorBase {
+	public:
+		auto virtual copiedDataPtr()->std::unique_ptr<SensorData> = 0;
+		auto virtual init() -> void = 0;
+		auto virtual start() -> void = 0;
+		auto virtual stop() -> void = 0;
+		auto isVirtual() const -> bool;
+		auto setVirtual(bool is_virtual) -> void;
+		auto activate() const -> bool;
+		auto setActivate(bool is_activate) -> void;
+		auto frequency() const->aris::Size;
+		auto setFrequency(aris::Size frequency) -> void;
+		auto name()->std::string&;
+		auto description() -> std::string&;
+
+		virtual ~SensorBase();
+		SensorBase(std::function<SensorData* ()> sensor_data_ctor,
+							 const std::string& name = "sensor_base", 
+							 const std::string& desc = "base class of all sensor", 
+							 bool is_virtual = true,
+							 bool activate = true,
+							 aris::Size frequency = 0);
+		SensorBase(const SensorBase& other) = delete;
+		SensorBase(SensorBase&& other) = delete;
+		SensorBase& operator=(const SensorBase& other) = delete;
+		SensorBase& operator=(SensorBase&& other) = delete;
+	private:
+		struct Imp;
+		aris::core::ImpPtr<Imp> imp_;
+	};
+
 	class ARIS_API Controller {
 	public:
 		auto virtual init()->void;
@@ -134,6 +170,10 @@ namespace aris::control{
 		auto resetFtSensorPool(aris::core::PointerArray<FtSensor> *pool);
 		auto ftSensorPool()->aris::core::PointerArray<FtSensor>&;
 		auto ftSensorPool()const->const aris::core::PointerArray<FtSensor>& { return const_cast<std::decay_t<decltype(*this)> *>(this)->ftSensorPool(); }
+		
+		auto resetSensorPool(aris::core::PointerArray<SensorBase>* pool)->void;
+		auto sensorPool()->aris::core::PointerArray<SensorBase>&;
+		auto sensorPool()const->const aris::core::PointerArray<SensorBase>& { return const_cast<std::decay_t<decltype(*this)> *>(this)->sensorPool(); }
 
 		virtual ~Controller();
 		Controller(const std::string &name = "controller");
