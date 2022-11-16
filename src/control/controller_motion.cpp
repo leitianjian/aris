@@ -148,7 +148,12 @@ namespace aris::control{
 	auto Controller::ftSensorPool()->aris::core::PointerArray<FtSensor>& { return *imp_->ft_sensor_pool_; }
 	auto Controller::resetSensorPool(aris::core::PointerArray<SensorBase> *pool) -> void { imp_->sensor_pool_.reset(pool); }
 	auto Controller::sensorPool()->aris::core::PointerArray<SensorBase>& { return *imp_->sensor_pool_; }
-	auto Controller::init()->void{}
+	auto Controller::init()->void{
+		for (auto& sensor : sensorPool()) {
+			sensor.init();
+			sensor.start();
+		}
+	}
 	Controller::~Controller() = default;
 	Controller::Controller(const std::string &name) :imp_(new Imp) {}
 

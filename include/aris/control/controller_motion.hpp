@@ -119,9 +119,12 @@ namespace aris::control{
 		virtual auto getFtData(double *data_address)->void = 0;
 	};
 
-	struct ARIS_API SensorData {
+	class ARIS_API SensorData {
+	public:
 		virtual ~SensorData() = default;
 		SensorData() = default;
+		auto virtual to_json_string(std::string& str) -> void {};
+		auto virtual from_json_string(const std::string& j) -> void {};
 	};
 
 	class ARIS_API SensorBase {
