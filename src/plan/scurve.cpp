@@ -1,6 +1,6 @@
 ﻿#include"aris/plan/scurve.hpp"
 
-//#define DEBUG_ARIS_PLAN_TRAJECTORY
+#define DEBUG_ARIS_PLAN_TRAJECTORY
 
 
 namespace aris::plan {
@@ -73,6 +73,13 @@ namespace aris::plan {
         }
         return (x_below + x_upper) / 2;
     }
+
+    auto inline safe_sqrt(double v)->double {
+        return v > 0.0 ? std::sqrt(v) : 0.0;
+    }
+
+    auto s_compute_scurve_Tmax_Tmin(const SCurveParam& param, double T_min_set)->std::tuple<double, double>;
+
 
     // 根据起始条件，终止位置，总时间来计算 S 曲线
     //
@@ -230,11 +237,11 @@ namespace aris::plan {
             //%   = la + T*v - Ta*v -Tb*v/2
             param.Ta_ = newton_raphson_binary_search([va, j, pt, T](double Ta)->double {
                 return T * va - (Ta * Ta * Ta * j) / 8
-                    - (va / 2 + Ta * Ta * j / 8) * std::sqrt(Ta * Ta + 4 * va / j)
+                    - (va / 2 + Ta * Ta * j / 8) * safe_sqrt(Ta * Ta + 4 * va / j)
                     + (T * Ta*Ta * j) / 4 - pt;
                 }
             , 0, std::min(std::min(s_acc_time(va, vc, a, j), T / 2.0), T - T_0_to_va));
-            param.Tb_ = std::sqrt(4.0 * va / j + Ta * Ta); 
+            param.Tb_ = safe_sqrt(4.0 * va / j + Ta * Ta);
             param.vc_  = va + j*Ta*Ta/4.0;
             param.vb_ = 0;
             param.mode_ = 0;
@@ -258,10 +265,8 @@ namespace aris::plan {
 
                 param.Ta_ = newton_raphson_binary_search([va, j, pt, T](double Ta)->double {
                     return T * va - (Ta * Ta * Ta * j) / 8
-                        - (va / 2 + Ta * Ta * j / 8) * std::sqrt(Ta * Ta + 4 * va / j)
+                        - (va / 2 + Ta * Ta * j / 8) * safe_sqrt(Ta * Ta + 4 * va / j)
                         + (T * Ta * Ta * j) / 4 - pt;
-                    //return T * va - (Ta * Ta * Ta * j) / 8 - (va * std::sqrt(Ta * Ta + (4 * va) / j)) / 2
-                    //    - (Ta * Ta * j * std::sqrt(Ta * Ta + (4 * va) / j)) / 8 + (T * Ta * Ta * j) / 4 - pt;
                     }
                 , 0, std::min(std::min(s_acc_time(va, vc, a, j), T / 2.0), T - T_0_to_va));
 
@@ -300,7 +305,7 @@ namespace aris::plan {
         {
             double k1 = 2 * (T * a + Z1);
             double k0 = -a * a * ((4 * va) / j + T * T + Z1 / j - (2 * T * a) / j);
-            double x1 = (k1 - std::sqrt(k1 * k1 + 4 * k0)) / 2; // k0为 - 1
+            double x1 = (k1 - safe_sqrt(k1 * k1 + 4 * k0)) / 2; // k0为 - 1
 
             v_upper = std::min(std::min(std::min(x1, va + Z1), vc_max), T * a - Z1);
             v_below = std::max(Z1, va);
@@ -378,7 +383,7 @@ namespace aris::plan {
             //%
             //% 因此可用 newton_raphson 方法搜索 [0,r1] 内的取值
             double Ta_below = 0;
-            double Ta_upper = (-3.0*a + std::sqrt(a*a + T*j*a*16.0 - j*va*16.0))/(2.0*j);
+            double Ta_upper = (-3.0*a + safe_sqrt(a*a + T*j*a*16.0 - j*va*16.0))/(2.0*j);
             param.Ta_ = newton_raphson_binary_search([k4,k3,k2,k0](double x)->double {return x*x*(x*(x*k4 + k3) + k2) + k0; }, Ta_below, Ta_upper);
             param.vc_ = va + j * Ta * Ta / 4.0;
             param.Tb_ = (vc + Z1) / a;
@@ -392,7 +397,6 @@ namespace aris::plan {
                 double ratio = T / (param.Ta_ + param.Tb_);
                 param.Ta_ *= ratio;
                 param.Tb_ *= ratio;
-            
             }
 
 #ifdef DEBUG_ARIS_PLAN_TRAJECTORY
@@ -401,7 +405,37 @@ namespace aris::plan {
                 || std::abs(Ta * (va + vc) / 2 + Tb * vc / 2 + (T - Ta - Tb) * vc - pt) > l_cons
                 ) {
                 double l = k4 * Ta * Ta * Ta * Ta + k3 * Ta * Ta * Ta + k2 * Ta * Ta + k0;
-                auto [Tmax, Tmin] = s_compute_s_curve_Tmax_Tmin(param);
+
+                std::cout << "debug -----------------------------" << std::setprecision(18) << std::endl;
+                auto [Tmax, Tmin] = s_compute_scurve_Tmax_Tmin(param, 0.001);
+                std::cout << "Tmax:" << Tmax << std::endl;
+                std::cout << "Tmin:" << Tmin << std::endl;
+
+                std::cout << "Ta:" << Ta << std::endl;
+                std::cout << "Tb:" << Tb << std::endl;
+                std::cout << "T :" << T << std::endl;
+                std::cout << "T - Ta - Tb:" << T - Ta - Tb << std::endl;
+                std::cout << "l :" << l << std::endl;
+                std::cout << "pt:" << pt << std::endl;
+                std::cout << "l-pt:" << l - pt << std::endl;
+
+                std::cout << "Ta_below:" << Ta_below << std::endl;
+                std::cout << "Ta_upper:" << Ta_upper << std::endl;
+
+                std::cout << "k0:" << k0 << std::endl;
+                std::cout << "k2:" << k2 << std::endl;
+                std::cout << "k3:" << k3 << std::endl;
+                std::cout << "k3:" << k4 << std::endl;
+                std::cout << "a :" << param.a_ << std::endl;
+                std::cout << "j :" << param.j_ << std::endl;
+                std::cout << "va:" << param.va_ << std::endl;
+                std::cout << "vc:" << param.vc_ << std::endl;
+                
+                std::cout << "vb:" << param.vb_ << std::endl;
+                std::cout << "vc max:" << param.vc_max_ << std::endl;
+                std::cout << "vb max:" << param.vb_max_ << std::endl;
+
+
                 THROW_FILE_LINE("ERROR l4");
             }
 #endif
@@ -459,7 +493,7 @@ namespace aris::plan {
             double k1 = (a*T - va + Z1);
             double k0 = (va - Z1)*(T - va/a/2)- pt;
     
-            param.Ta_ = (-k1 + std::sqrt(k1*k1 - 4*k0*k2))/(2*k2);
+            param.Ta_ = (-k1 + safe_sqrt(k1*k1 - 4*k0*k2))/(2*k2);
             param.vc_ = va + Ta*a - Z1;
             param.vb_ = 0;
             param.Tb_ = (vc + Z1)/a;
@@ -492,7 +526,7 @@ namespace aris::plan {
         //% 条件 B.3 可得 Ta <= T_va_to_max_v
         //% 条件 B.4 可得 Ta >= 0  (包含在B.2中)
         double Ta_upper = std::min(std::min(T_va_to_max_v, 2.0*a/j), T - 2.0*a/j);
-        double Ta_below = 2.0*std::sqrt(std::max(0.0, Z1 - va)/j);
+        double Ta_below = 2.0* safe_sqrt((Z1 - va)/j);
         if (Ta_upper >= Ta_below) {
             Ta = Ta_upper;
             vc = va + j * Ta * Ta / 4.0;
@@ -565,7 +599,7 @@ namespace aris::plan {
                 || std::abs(Ta * (va + vc) / 2 + Tb * (vb + vc) / 2 + (T - Ta - Tb)*vc - pt) > l_cons
                 || (vb - param.vb_max_) > std::max(param.vb_max_ * 1e-10, 1e-10)
                 ) {
-                auto [Tmax, Tmin] = s_compute_s_curve_Tmax_Tmin(param);
+                auto [Tmax, Tmin] = s_compute_scurve_Tmax_Tmin(param, 0.001);
                 THROW_FILE_LINE("ERROR l6");
             }
 #endif
@@ -575,8 +609,8 @@ namespace aris::plan {
         //
         //% ------------------ l8 -------------------- 
         //% vb不为0，达不到max_v，a段可达到最大加速度，b段可达到最大加速度
-        Ta_upper = std::min(T_va_to_max_v, T - 2*a/j);
-        Ta_below = 2*a/j;
+        Ta_upper = std::min(T_va_to_max_v, T - 2.0 * a / j);
+        Ta_below = 2.0 * a / j;
         l=-1;
         if (Ta_upper >= Ta_below) {
             Ta = Ta_upper;
@@ -612,7 +646,7 @@ namespace aris::plan {
             //    % r = k1 / (2*k2) = T
             //    % 应有 Ta < T
             //    % 故而选其较小的根
-            param.Ta_ = (-k1 + std::sqrt(k1 * k1 - 4 * k0 * k2)) / 2 / k2;
+            param.Ta_ = (-k1 + safe_sqrt(k1 * k1 - 4 * k0 * k2)) / 2 / k2;
             param.vc_ = va + Ta * a - Z1;
             param.Tb_ = T - Ta;
             param.vb_ = s_acc_vend(vc, -a, -j, Tb);
@@ -651,7 +685,7 @@ namespace aris::plan {
             double B = -a / j;
             double C = -(2.0 * la - 2.0 * pt + 2.0 * vc_max * (T - T_va_to_max_v)) / a;
 
-            param.Tb_ = std::max((-B + std::sqrt(B*B - 4.0 * C)) / 2.0, 0.0);
+            param.Tb_ = std::max((-B + safe_sqrt(B*B - 4.0 * C)) / 2.0, 0.0);
             param.Ta_ = s_acc_time(va, vc_max, a, j);
             param.vb_ = vc_max - Tb * a + Z1;
             param.vc_ = vc_max;
@@ -672,20 +706,20 @@ namespace aris::plan {
         }
 
         //% ------------------ l7 --------------------- 
-//% vb不为0，达不到max_v，a段达不到最大加速度，b段达不到最大加速度
-//%
-//% 此时需要满足3个条件：
-//% A. Ta + Tb =  T
-//% B. v - va  <= a^2/j && v - vb <= a^2/j && v <= max_v && v >= va
-//% C. pt <= l
-//%
-//% 条件 A   可得 Ta =  T-Tb
-//%            => Ta >= T - 2*a/j   (因为Tb < 2*a/j)
-//%
-//% 条件 B.1 可得 Ta <= 2*a/j
-//% 条件 B.2 无法得到有效等式，因为vb可以为为任意值
-//% 条件 B.3 可得 Ta <= T_va_to_max_v
-//% 条件 B.4 可得 Ta >= 0
+        //% vb不为0，达不到max_v，a段达不到最大加速度，b段达不到最大加速度
+        //%
+        //% 此时需要满足3个条件：
+        //% A. Ta + Tb =  T
+        //% B. v - va  <= a^2/j && v - vb <= a^2/j && v <= max_v && v >= va
+        //% C. pt <= l
+        //%
+        //% 条件 A   可得 Ta =  T-Tb
+        //%            => Ta >= T - 2*a/j   (因为Tb < 2*a/j)
+        //%
+        //% 条件 B.1 可得 Ta <= 2*a/j
+        //% 条件 B.2 无法得到有效等式，因为vb可以为为任意值
+        //% 条件 B.3 可得 Ta <= T_va_to_max_v
+        //% 条件 B.4 可得 Ta >= 0
         Ta_upper = std::min(std::min(T, T_va_to_max_v), 2.0 * a / j);
         Ta_below = std::max(0.0, T - 2.0 * a / j);
         l = -1;
@@ -722,10 +756,11 @@ namespace aris::plan {
             //% 选根
             //% 其极值为(k1) / (2 * k2) = (3 * T) / 2
             //% 因此需选其较小的根
-            param.Ta_ = (-k1 - std::sqrt(k1 * k1 - 4.0 * k0 * k2)) / 2.0 / k2;
+            param.Ta_ = (-k1 - safe_sqrt(k1 * k1 - 4.0 * k0 * k2)) / 2.0 / k2;
 
             // adjust //
             param.Ta_ = std::max(param.Ta_, 0.0);
+            param.Ta_ = std::min(param.Ta_, param.T_);
             // adjust finished //
 
             param.vc_ = va + j * Ta * Ta / 4.0;
@@ -739,8 +774,24 @@ namespace aris::plan {
                 || (vb - param.vb_max_) > std::max(param.vb_max_ * 1e-10, 1e-10)
                 ) {
                 //double l = k2 * Ta * Ta + k1 * Ta + k0;
-                std::cout << "debug -----------------------------" << std::endl;
-                auto [Tmax, Tmin] = s_compute_s_curve_Tmax_Tmin(param);
+                std::cout << "debug -----------------------------" << std::setprecision(15) << std::endl;
+                auto [Tmax, Tmin] = s_compute_scurve_Tmax_Tmin(param, 0.001);
+                std::cout << "Tmax:" << Tmax << std::endl;
+                std::cout << "Tmin:" << Tmin << std::endl;
+
+
+                std::cout << "Ta:" << Ta << std::endl;
+                std::cout << "Tb:" << Tb << std::endl;
+                std::cout << "T :" << T << std::endl;
+                std::cout << "T - Ta - Tb:" << T - Ta - Tb << std::endl;
+                std::cout << "l :" << Ta * (va + vc) / 2 + Tb * (vb + vc) / 2 + (T - Ta - Tb) * vc << std::endl;
+                std::cout << "pt:" << pt << std::endl;
+                std::cout << "l-pt:" << l-pt << std::endl;
+                std::cout << "vb:" << vb << std::endl;
+                std::cout << "vb max:" << param.vb_max_ << std::endl;
+
+
+
                 THROW_FILE_LINE("ERROR l7");
             }
 #endif
@@ -810,7 +861,7 @@ namespace aris::plan {
             //% error %
             if (Ta < -t_cons || Tb < -t_cons || T - Ta - Tb < -t_cons
                 || std::abs(Ta * (va + vc) / 2 + Tb * (vb + vc) / 2 + (T - Ta - Tb) * vc - pt) > l_cons
-                || (vb - param.vb_max_) > std::max(param.vb_max_ * 1e-10, 1e-10)
+                || (vb - param.vb_max_) > std::max(param.vb_max_ * 1e-9, 1e-9)
                 ) {
                 double l = Ta * (Ta * (k3 * Ta + k2) + k1) + k0;
                 param.Ta_ = newton_raphson_binary_search([k0, k1, k2, k3](double x) ->double {
@@ -852,6 +903,24 @@ namespace aris::plan {
             || std::abs(Ta * (va + vc) / 2 + Tb * (vb + vc) / 2 + (T - Ta - Tb) * vc - pt) > l_cons
             || (vb - param.vb_max_) > std::max(param.vb_max_ * 1e-10, 1e-10)
             ) {
+            std::cout << "debug -----------------------------" << std::setprecision(15) << std::endl;
+            auto [Tmax, Tmin] = s_compute_scurve_Tmax_Tmin(param, 0.001);
+            std::cout << "Tmax:" << Tmax << std::endl;
+            std::cout << "Tmin:" << Tmin << std::endl;
+
+
+            std::cout << "Ta:" << Ta << std::endl;
+            std::cout << "Tb:" << Tb << std::endl;
+            std::cout << "T :" << T << std::endl;
+            std::cout << "T - Ta - Tb:" << T - Ta - Tb << std::endl;
+            std::cout << "l :" << Ta * (va + vc) / 2 + Tb * (vb + vc) / 2 + (T - Ta - Tb) * vc << std::endl;
+            std::cout << "pt:" << pt << std::endl;
+            std::cout << "l-pt:" << l - pt << std::endl;
+            std::cout << "vb:" << vb << std::endl;
+            std::cout << "vb max:" << param.vb_max_ << std::endl;
+
+
+
             THROW_FILE_LINE("ERROR l11");
         }
 #endif
@@ -890,7 +959,7 @@ namespace aris::plan {
         const double a      = param.a_;
         const double j      = param.j_;
         const double pt     = param.pb_ - param.pa_;
-        double Tmin_max = T_min_set;
+        const double Tmin_max = T_min_set;
         if (pt < std::numeric_limits<double>::epsilon() * 100){
             if (va > std::numeric_limits<double>::epsilon() * 100) {
                 return std::make_tuple<double, double>(-1.0, -1.0);
@@ -911,7 +980,7 @@ namespace aris::plan {
         if ((!std::isfinite(Z1)) || (!std::isfinite(T_va_to_vb)) || (!std::isfinite(l_va_to_vb)) || (va > vb_max && l_va_to_vb > pt))
             return std::make_tuple(-1, -1);
 
-        double pacc = va - 1.5 * Z1 > 0 ? 0.5 * (Z1 / 2 + va) * (Z1 / 2 + va) / a : 4.0 / 3.0 * va * std::sqrt(2.0 / 3.0 * va / j);
+        double pacc = va - 1.5 * Z1 > 0 ? 0.5 * (Z1 / 2 + va) * (Z1 / 2 + va) / a : 4.0 / 3.0 * va * safe_sqrt(2.0 / 3.0 * va / j);
         if (pacc <= pt)
             Tmax = std::numeric_limits<double>::infinity();
         else {
@@ -932,7 +1001,7 @@ namespace aris::plan {
                 //% vb 的范围取自 【va/3，va】,
                 //% 因为T的极值为 sqrt(va*8/3/j)，此时带入vb的公式，可得
 
-                double vb = newton_raphson_binary_search([va, j, pt](double x) {return std::sqrt((va - x) / j) * (va + x) - pt; }
+                double vb = newton_raphson_binary_search([va, j, pt](double x) {return safe_sqrt((va - x) / j) * (va + x) - pt; }
                 , va / 3, va);
                 Tmax = s_acc_time(va, vb, a, j);
             }
@@ -951,10 +1020,13 @@ namespace aris::plan {
                 //% 对于根来说，应当取大值，这是因为Tmax应该尽可能的小
                 double B = -Z1;
                 double C = 2 * pt * a - va * Z1 - va * va;
-                double vb = (-B + std::sqrt(B * B - 4 * C)) / 2;
+                double vb = (-B + safe_sqrt(B * B - 4 * C)) / 2;
                 Tmax = s_acc_time(va, vb, a, j);
             }
         }
+
+        if(Tmax < Tmin_max)
+            return std::make_tuple(-1.0, -1.0);
 
         //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 计算Tmin：%%%%%%
 
@@ -1003,7 +1075,7 @@ namespace aris::plan {
 
             //%%%%%%%%%%%%%%%%% METHOD2 %%%%%%%%%%%%%%%%% 
             //% newton raphson %
-            vb = newton_raphson_binary_search([va, j, pt](double x) {return std::sqrt((x - va) / j) * (va + x) - pt; }
+            vb = newton_raphson_binary_search([va, j, pt](double x) {return safe_sqrt((x - va) / j) * (va + x) - pt; }
             , va, vb_max);
             Tmin = s_acc_time(va, vb, a, j);
             return std::make_tuple(Tmax, Tmin);
@@ -1031,7 +1103,7 @@ namespace aris::plan {
             double k0 = (va * (a / j - va / a)) / 2 - pt;
 
             //% 选根 %
-            vb = (-k1 + std::sqrt(k1 * k1 - 4 * k2 * k0)) / (k2 * 2);
+            vb = (-k1 + safe_sqrt(k1 * k1 - 4 * k2 * k0)) / (k2 * 2);
             Tmin = s_acc_time(va, vb, a, j);
             return std::make_tuple(Tmax, Tmin);
         }
@@ -1064,12 +1136,12 @@ namespace aris::plan {
             //  ，sqrt(x - v1)精度不够
             // 
             double v_minus_v1 = newton_raphson_binary_search([v1,v2,j,pt](double x) {
-                return std::sqrt(x / j) * (2.0*v1 + x) + std::sqrt((v1 - v2 + x) / j) * (v1 + v2 + x) - pt;
+                return safe_sqrt(x / j) * (2.0*v1 + x) + safe_sqrt((v1 - v2 + x) / j) * (v1 + v2 + x) - pt;
                 }
                 , 0.0, v_upper - v_below);
 
-            double T1 = 2 * std::sqrt(v_minus_v1 / j);
-            double T2 = 2 * std::sqrt((v1 - v2 + v_minus_v1) / j);
+            double T1 = 2 * safe_sqrt(v_minus_v1 / j);
+            double T2 = 2 * safe_sqrt((v1 - v2 + v_minus_v1) / j);
             Tmin = T1 + T2;
             return std::make_tuple(Tmax, Tmin);
         }
@@ -1109,11 +1181,11 @@ namespace aris::plan {
             //  ，sqrt(x - v1)精度不够
             // 
             double v_minus_v1 = newton_raphson_binary_search([v1, v2, a, j, pt](double x)->double {
-                return std::sqrt(x / j) * x + ((v1 - v2 + x) / a + a / j) * (v1 + v2 + x) / 2 - pt;
+                return safe_sqrt(x / j) * (x + 2.0*v1) + ((v1 - v2 + x) / a + a / j) * (v1 + v2 + x) / 2 - pt;
                 }
-                , v_below, v_upper);
+                , v_below - v1, v_upper - v1);
 
-            double T1 = 2 * std::sqrt(v_minus_v1 / j);
+            double T1 = 2 * safe_sqrt(v_minus_v1 / j);
             double T2 = (v1 - v2 + v_minus_v1) / a + a / j;
             Tmin = T1 + T2;
             return std::make_tuple(Tmax, Tmin);
@@ -1160,7 +1232,7 @@ namespace aris::plan {
             double k1 = a / j;
             double k0 = (v1 * (a / j - v1 / a)) / 2 - pt + (v2 * (a / j - v2 / a)) / 2;
 
-            double v = (-k1 + std::sqrt(k1 * k1 - 4 * k0 * k2)) / (2 * k2);
+            double v = (-k1 + safe_sqrt(k1 * k1 - 4 * k0 * k2)) / (2 * k2);
 
             double T1 = (v - v1) / a + a / j;
             double T2 = (v - v2) / a + a / j;
@@ -1182,6 +1254,377 @@ namespace aris::plan {
         Tmin = T1 + T2 + T3;
         return std::make_tuple(Tmax, Tmin);
 	}
+
+    // 针对相连接的 node_1 和 node_2 来优化连接处的速度和加速度
+    // 1. 连接处的速度  vb1 = va2 < vc1 AND vb1 = va2 < vc2 AND vb1 = va2 < vb1_max
+    //    此时需要提速，提高结束点的速度
+    auto s_optimize_ajacent_nodes(SCurveParam& param1, SCurveParam& param2)->void {
+        // 【以下注释暂不可用】
+        // STEP 1. 计算 param1 允许的最大的 vb 
+        //    vb 最大值发生的条件：
+        //       a. vb = vc 时
+        //       b. vb = vb_max 时
+        //    下计算 vb = vc 时，vb 的最大值
+        //       a.1   va 加速到 vb，有匀加速段
+        //       a.1.1 va * T < l  &&  (vb-va)>a^2/j
+        //             Ta = (vb-va) / a + a/j
+        //             l  = Ta * (va + vb)/2 + (T-Ta)*vb
+        //             =>  vb^2 + B*vb + C = 0
+        //             其中  B = a^2/j - 2*T*a - 2*va
+        //                   C = va^2 - (a^2*va)/j + 2*a*l
+        //             
+        //             于是 vb = (-B - sqrt(B^2 - 4*C))/2
+        //       a.1.2 va * T >= l
+        //             此时  B = - a^2/j + 2*T*a - 2*va
+        //                   C = (a^2*va)/j - 2*l*a + va^2
+        //       a.2   va 加速到 vb，无匀加速段
+        //       a.2.1 va * T < l
+        //             Ta = 2*sqrt((vb-va)/j)
+
+        if (((param1.mode_ == 0 && param1.vc_ > param1.vb_) || (param1.mode_ == 1 && param1.va_ > param1.vb_))
+            && 
+            ((param2.mode_ == 0 && param2.vc_ > param2.va_) || (param2.mode_ == 1 && param2.va_ < param2.vb_))) {
+#ifdef DEBUG_ARIS_PLAN_TRAJECTORY
+            auto p1 = param1;
+            auto p2 = param2;
+#endif
+            
+            auto vb_upper = std::min({ 
+                param1.vb_max_, 
+                param1.mode_ == 0 ? param1.vc_ : param1.va_,
+                param2.mode_ == 0 ? param2.vc_ : param2.vb_,
+                s_acc_vend(param1.va_, param1.a_, param1.j_, param1.T_), 
+                s_acc_vend(param2.vb_, param2.a_, param2.j_, param2.T_) 
+                });
+
+            auto vb_lower = param1.vb_;
+
+            double l1 = param1.pb_ - param1.pa_;
+            double l2 = param2.pb_ - param2.pa_;
+
+            auto vb1_max = newton_raphson_binary_search([&param1, l1](double vb)->double {
+                double Ta = s_acc_time(param1.va_, vb, param1.a_, param1.j_);
+                return Ta * (param1.va_ + vb) / 2 + vb * (param1.T_ - Ta) - l1;
+                }, vb_lower, vb_upper);
+
+            auto va2_max = newton_raphson_binary_search([&param2, l2](double va)->double {
+                double Tb = s_acc_time(param2.vb_, va, param2.a_, param2.j_);
+                return Tb * (param2.vb_ + va) / 2 + va * (param2.T_ - Tb) - l2;
+                }, vb_lower, vb_upper);
+
+            auto vb1 = std::min(vb1_max, va2_max);
+
+            // 以上理论值没错，但考虑到重规划需要保证一定能成功，还需确保Tmax > Tmin
+            {
+                double previous_va = param2.va_;
+
+                param2.va_ = vb1;
+
+                double Tmax, Tmin;
+                std::tie(Tmax, Tmin) = s_compute_scurve_Tmax_Tmin(param2, 0.0);
+                if (Tmax < Tmin) {
+                    double va_below = previous_va;
+                    double va_upper = vb1;
+
+                    double cons = std::max(vb1, 1e-10) * 1e-10;
+                    
+                    // 二分法寻找最接近 vb1 的可行 va
+                    double diff = va_below - va_upper;
+                    double diff_last;
+
+                    do {
+                        param2.va_ = (va_below + va_upper) / 2.0;
+
+                        std::tie(Tmax, Tmin) = s_compute_scurve_Tmax_Tmin(param2, 0.0);
+                        if (Tmin <= param2.T_ && param2.T_ <= Tmax) {
+                            va_upper = param2.va_;
+                        }
+                        else {
+                            va_below = param2.va_;
+                        }
+                        diff_last = diff;
+                        diff = va_below - va_upper;
+
+                    } while (diff < diff_last);
+
+                    vb1 = va_below;
+                }
+            }
+
+            // param1 //
+            {
+                double T_va_to_vb = s_acc_time(vb1, param1.va_, param1.a_, param1.j_);
+                if (l1 > (param1.T_ - T_va_to_vb) * std::max(vb1, param1.va_) + T_va_to_vb * (vb1 + param1.va_) / 2) {
+                    // mode 0 
+                    param1.mode_ = 0;
+                    param1.vb_ = vb1;
+
+                    auto vc1 = newton_raphson_binary_search([&param1, l1](double vc)->double {
+                        double Ta = s_acc_time(param1.va_, vc, param1.a_, param1.j_);
+                        double Tb = s_acc_time(param1.vb_, vc, param1.a_, param1.j_);
+                        return Ta * (param1.va_ + vc) / 2 + Tb * (param1.vb_ + vc) / 2 + (param1.T_ - Ta - Tb) * vc - l1;
+                        }, std::max(vb1, param1.va_), param1.vc_);
+
+                    param1.vc_ = vc1;
+                    param1.Ta_ = s_acc_time(param1.va_, vc1, param1.a_, param1.j_);
+                    param1.Tb_ = s_acc_time(param1.vb_, vc1, param1.a_, param1.j_);
+                }
+                else {
+                    // mode 1
+                    param1.mode_ = 1;
+                    param1.vb_ = vb1;
+
+                    double Tc = s_acc_time(param1.va_, param1.vb_, param1.a_, param1.j_);
+                    double va = vb1;
+                    double v_avg = (param1.T_ - Tc) > 1e-12 ? (l1 - Tc * (param1.va_ + param1.vb_) / 2) / (param1.T_ - Tc) : (param1.va_ + param1.vb_) / 2;
+                    param1.Ta_ = std::abs(param1.va_ - param1.vb_) > 1e-12 ? std::abs((v_avg - param1.vb_) / (param1.va_ - param1.vb_)) * (param1.T_ - Tc) : (param1.T_ - Tc) / 2;
+                    param1.Tb_ = param1.T_ - param1.Ta_ - Tc;
+                    param1.vc_ = v_avg;
+                }
+            }
+
+            // param2 //
+            {
+                double T_va_to_vb = s_acc_time(vb1, param2.vb_, param2.a_, param2.j_);
+                if (l2 > (param2.T_ - T_va_to_vb) * std::max(vb1, param2.vb_) + T_va_to_vb * (vb1 + param2.vb_) / 2) {
+                    // mode 0 
+                    param2.mode_ = 0;
+                    param2.va_ = vb1;
+                    auto vc2 = newton_raphson_binary_search([&param2, l2](double vc)->double {
+                        double Ta = s_acc_time(param2.va_, vc, param2.a_, param2.j_);
+                        double Tb = s_acc_time(param2.vb_, vc, param2.a_, param2.j_);
+                        return Ta * (param2.va_ + vc) / 2 + Tb * (param2.vb_ + vc) / 2 + (param2.T_ - Ta - Tb) * vc - l2;
+                        }, std::max(vb1, param2.vb_), param2.vc_);
+                    param2.vc_ = vc2;
+                    param2.Ta_ = s_acc_time(param2.va_, vc2, param2.a_, param2.j_);
+                    param2.Tb_ = s_acc_time(param2.vb_, vc2, param2.a_, param2.j_);
+
+                }
+                else {
+                    // mode 1
+                    param2.mode_ = 1;
+                    param2.va_ = vb1;
+
+                    double Tc = s_acc_time(param2.va_, param2.vb_, param2.a_, param2.j_);
+                    double va = vb1;
+                    double v_avg = (param2.T_ - Tc) > 1e-12 ? (l2 - Tc * (param2.va_ + param2.vb_) / 2) / (param2.T_ - Tc) : (param2.va_ + param2.vb_) / 2;
+                    param2.Ta_ = std::abs(param2.va_ - param2.vb_) > 1e-12 ? std::abs((v_avg - param2.vb_) / (param2.va_ - param2.vb_)) * (param2.T_ - Tc) : (param2.T_ - Tc) / 2;
+                    param2.Tb_ = param2.T_ - param2.Ta_ - Tc;
+                    param2.vc_ = v_avg;
+                }
+            }
+
+#ifdef DEBUG_ARIS_PLAN_TRAJECTORY
+
+            if (param1.Ta_ + param1.Tb_ > param1.T_ + 1e-9) {
+                //THROW_FILE_LINE("TIME ERROR");
+                
+                std::cout << "error" << __LINE__ << std::setprecision(15) << std::endl;
+                std::cout << "l :" << l1 << std::endl;
+                std::cout << "Ta:" << param1.Ta_ << std::endl;
+                std::cout << "Tb:" << param1.Tb_ << std::endl;
+                std::cout << "T :" << param1.T_ << std::endl;
+                std::cout << "va:" << param1.va_ << std::endl;
+                std::cout << "vb:" << param1.vb_ << std::endl;
+                std::cout << "vc:" << param1.vc_ << std::endl;
+                std::cout << "md:" << param1.mode_ << std::endl;
+                std::cout << "-----------------------------------------" << std::endl;
+                std::cout << "Ta:" << p1.Ta_ << std::endl;
+                std::cout << "Tb:" << p1.Tb_ << std::endl;
+                std::cout << "T :" << p1.T_ << std::endl;
+                std::cout << "va:" << p1.va_ << std::endl;
+                std::cout << "vb:" << p1.vb_ << std::endl;
+                std::cout << "vc:" << p1.vc_ << std::endl;
+                std::cout << "md:" << p1.mode_ << std::endl;
+                std::cout << "----------------------------------------------------" << std::endl;
+
+            }
+            if (param2.Ta_ + param2.Tb_ > param2.T_ + 1e-9) {
+                std::cout << param2.Ta_ * (param2.va_ + param2.vc_) / 2 + param2.Tb_ * (param2.vb_ + param2.vc_) / 2 + std::abs(param2.T_ - param2.Ta_ - param2.Tb_) * param2.vc_ << std::endl;
+                std::cout << l2 << std::endl;
+
+                auto vc2 = newton_raphson_binary_search([&param2, l2](double vc)->double {
+                    double Ta = s_acc_time(param2.va_, vc, param2.a_, param2.j_);
+                    double Tb = s_acc_time(param2.vb_, vc, param2.a_, param2.j_);
+                    return Ta * (param2.va_ + vc) / 2 + Tb * (param2.vb_ + vc) / 2 + aris::dynamic::s_sgn2(vc - param2.vb_) * (param2.T_ - Ta - Tb) * vc - l2;
+                    }, vb1, param2.vc_);
+
+
+                std::cout << "error" << __LINE__ << std::setprecision(15) << std::endl;
+                std::cout << "l :" << l2 << std::endl;
+                std::cout << "Ta:" << param2.Ta_ << std::endl;
+                std::cout << "Tb:" << param2.Tb_ << std::endl;
+                std::cout << "T :" << param2.T_ << std::endl;
+                std::cout << "va:" << param2.va_ << std::endl;
+                std::cout << "vb:" << param2.vb_ << std::endl;
+                std::cout << "vc:" << param2.vc_ << std::endl;
+                std::cout << "md:" << param2.mode_ << std::endl;
+                std::cout << "-----------------------------------------" << std::endl;
+                std::cout << "Ta:" << p2.Ta_ << std::endl;
+                std::cout << "Tb:" << p2.Tb_ << std::endl;
+                std::cout << "T :" << p2.T_ << std::endl;
+                std::cout << "va:" << p2.va_ << std::endl;
+                std::cout << "vb:" << p2.vb_ << std::endl;
+                std::cout << "vc:" << p2.vc_ << std::endl;
+                std::cout << "md:" << p2.mode_ << std::endl;
+                std::cout << "----------------------------------------------------" << std::endl;
+            }
+
+            //if (std::abs(param2.Ta_ * (param2.va_ + param2.vc_) / 2 + param2.Tb_ * (param2.vb_ + param2.vc_) / 2 + (param2.T_ - param2.Ta_ - param2.Tb_) * param2.vc_ - l2) > 1e-12) {
+            LargeNum p_out;
+            aris::plan::s_scurve_at(param2, param2.T_ + param2.t0_, &p_out);
+            p_out = p_out - param2.pa_;
+            if(std::abs(p_out - l2) > 1e-10){
+                std::cout << param2.Ta_ * (param2.va_ + param2.vc_) / 2 + param2.Tb_ * (param2.vb_ + param2.vc_) / 2 + (param2.T_ - param2.Ta_ - param2.Tb_) * param2.vc_ << std::endl;
+                std::cout << "error" << __LINE__ << std::endl;
+                
+                aris::plan::s_scurve_at(param2, param2.T_ + param2.t0_, &p_out);
+                
+                std::cout << "result: " << p_out - param2.pa_ << std::endl;
+
+                param2 = p2;
+
+                aris::plan::s_scurve_at(param2, param2.T_ + param2.t0_, &p_out);
+
+                std::cout << "ori   : " << p_out - param2.pa_ << std::endl;
+
+                auto va2_max = newton_raphson_binary_search([&param2, l2](double va)->double {
+                    double Tb = s_acc_time(param2.vb_, va, param2.a_, param2.j_);
+                    return Tb * (param2.vb_ + va) / 2 + va * (param2.T_ - Tb) - l2;
+                    }, vb_lower, vb_upper);
+
+                double Tb = s_acc_time(param2.vb_, va2_max, param2.a_, param2.j_);
+                std::cout << Tb * (param2.vb_ + va2_max) / 2 + va2_max * (param2.T_ - Tb) - l2 << std::endl;
+
+                double T_va_to_vb = s_acc_time(vb1, param2.vb_, param2.a_, param2.j_);
+
+                // mode 1
+                if (l2 > (param2.T_ - T_va_to_vb) * std::max(vb1, param2.vb_) + T_va_to_vb * (vb1 + param2.vb_) / 2
+                    || l2 < (param2.T_ - T_va_to_vb) * std::min(vb1, param2.vb_) + T_va_to_vb * (vb1 + param2.vb_) / 2) {
+                    // mode 0 
+                    param2.mode_ = 0;
+                    param2.va_ = vb1;
+                    auto vc2 = newton_raphson_binary_search([&param2, l2](double vc)->double {
+                        double Ta = s_acc_time(param2.va_, vc, param2.a_, param2.j_);
+                        double Tb = s_acc_time(param2.vb_, vc, param2.a_, param2.j_);
+                        return Ta * (param2.va_ + vc) / 2 + Tb * (param2.vb_ + vc) / 2 + (param2.T_ - Ta - Tb) * vc - l2;
+                        }, std::max(vb1, param2.vb_), param2.vc_);
+                    param2.vc_ = vc2;
+                    param2.Ta_ = s_acc_time(param2.va_, vc2, param2.a_, param2.j_);
+                    param2.Tb_ = s_acc_time(param2.vb_, vc2, param2.a_, param2.j_);
+
+                }
+                else {
+                    // mode 1
+                    param2.mode_ = 1;
+                    param2.va_ = vb1;
+
+                    double Tc = s_acc_time(param2.va_, param2.vb_, param2.a_, param2.j_);
+                    double va = vb1;
+                    double v_avg = (param2.T_ - Tc) > 1e-7 ? (l2 - Tc * (param2.va_ + param2.vb_) / 2) / (param2.T_ - Tc) : 0.0;
+                    param2.Ta_ = (param2.va_ - param2.vb_) > 1e-10 ? std::abs((v_avg - param2.vb_) / (param2.va_ - param2.vb_)) * (param2.T_ - Tc) : (param2.T_ - Tc) / 2;
+                    param2.Tb_ = param2.T_ - param2.Ta_;
+                    param2.vc_ = v_avg;
+                }
+
+
+
+
+
+
+                auto vc2 = newton_raphson_binary_search([&param2, l2](double vc)->double {
+                    double Ta = s_acc_time(param2.va_, vc, param2.a_, param2.j_);
+                    double Tb = s_acc_time(param2.vb_, vc, param2.a_, param2.j_);
+                    return Ta * (param2.va_ + vc) / 2 + Tb * (param2.vb_ + vc) / 2 + aris::dynamic::s_sgn2(vc - param2.vb_) * (param2.T_ - Ta - Tb) * vc - l2;
+                    }, vb1, param2.vc_);
+
+            }
+            aris::plan::s_scurve_at(param1, param1.T_ + param1.t0_, &p_out);
+            p_out = p_out - param1.pa_;
+            if (std::abs(p_out - l1) > 1e-9) {
+                std::cout << "error" << __LINE__ << std::setprecision(15) << std::endl;
+                std::cout << "l :" << l1 << std::endl;
+                std::cout << "p_out:" << p_out << std::endl;
+                std::cout << "Ta:" << param1.Ta_ << std::endl;
+                std::cout << "Tb:" << param1.Tb_ << std::endl;
+                std::cout << "T :" << param1.T_ << std::endl;
+                std::cout << "va:" << param1.va_ << std::endl;
+                std::cout << "vb:" << param1.vb_ << std::endl;
+                std::cout << "vc:" << param1.vc_ << std::endl;
+                std::cout << "md:" << param1.mode_ << std::endl;
+                std::cout << "-----------------------------------------" << std::endl;
+                std::cout << "Ta:" << p1.Ta_ << std::endl;
+                std::cout << "Tb:" << p1.Tb_ << std::endl;
+                std::cout << "T :" << p1.T_ << std::endl;
+                std::cout << "va:" << p1.va_ << std::endl;
+                std::cout << "vb:" << p1.vb_ << std::endl;
+                std::cout << "vc:" << p1.vc_ << std::endl;
+                std::cout << "md:" << p1.mode_ << std::endl;
+                std::cout << "----------------------------------------------------" << std::endl;
+            }
+
+            aris::plan::s_scurve_at(param2, param2.t0_, &p_out);
+            if (std::abs(p_out - param2.pa_) > 1e-10) {
+                aris::plan::s_scurve_at(param2, param2.t0_, &p_out);
+
+                // mode 1
+                param2.mode_ = 1;
+                param2.va_ = vb1;
+
+                double Tc = s_acc_time(param2.va_, param2.vb_, param2.a_, param2.j_);
+                double va = vb1;
+                double v_avg = (param2.T_ - Tc) > 1e-7 ? (l2 - Tc * (param2.va_ + param2.vb_) / 2) / (param2.T_ - Tc) : (param2.va_ + param2.vb_) / 2;
+                param2.Ta_ = (param2.va_ - param2.vb_) > 1e-10 ? std::abs((v_avg - param2.vb_) / (param2.va_ - param2.vb_)) * (param2.T_ - Tc) : (param2.T_ - Tc) / 2;
+                param2.Tb_ = param2.T_ - param2.Ta_;
+                param2.vc_ = v_avg;
+
+                std::cout << "error" << __LINE__ << std::endl;
+            }
+
+            aris::plan::s_scurve_at(param2, param2.t0_, &p_out);
+            p_out = (param2.T_ - param2.Ta_ - param2.Tb_) * (param2.va_ + param2.vb_) / 2
+                + param2.va_ * param2.Ta_ + param2.Tb_ * param2.vb_;
+            if (param2.mode_ == 1 && std::abs(p_out - l2) > 1e-10) {
+                aris::plan::s_scurve_at(param2, param2.t0_, &p_out);
+
+                std::cout << std::setprecision(15);
+
+                std::cout << param2.Ta_ << std::endl;
+                std::cout << param2.Tb_ << std::endl;
+                std::cout << param2.T_ << std::endl;
+                std::cout << param2.va_ << std::endl;
+                std::cout << param2.vb_ << std::endl;
+                std::cout << param2.vc_ << std::endl;
+                std::cout << l2 << std::endl;
+                std::cout << param2.mode_ << std::endl;
+
+                // mode 1
+                param2.mode_ = 1;
+                param2.va_ = vb1;
+
+                double Tc = s_acc_time(param2.va_, param2.vb_, param2.a_, param2.j_);
+                double va = vb1;
+                double v_avg = (param2.T_ - Tc) > 1e-7 ? (l2 - Tc * (param2.va_ + param2.vb_) / 2) / (param2.T_ - Tc) : (param2.va_ + param2.vb_) / 2;
+                param2.Ta_ = (param2.va_ - param2.vb_) > 1e-10 
+                    ? std::abs((v_avg - param2.vb_) / (param2.va_ - param2.vb_)) * (param2.T_ - Tc) 
+                    : (param2.T_ - Tc) / 2;
+                param2.Tb_ = param2.T_ - param2.Ta_;
+                param2.vc_ = v_avg;
+
+                std::cout << "error" << __LINE__ << std::endl;
+            }
+
+            aris::plan::s_scurve_at(param1, param1.t0_, &p_out);
+            if (std::abs(p_out - param1.pa_) > 1e-10) {
+                std::cout << "error" << __LINE__ << std::endl;
+            }
+#endif
+        }
+
+        
+
+    }
+
 
     // 以最大时间测试是否可能达到终止条件，即：
     // cond A: 所有末端速度均减为0
@@ -1221,7 +1664,7 @@ namespace aris::plan {
     }
 
     // 循环计算每个节点：
-    auto ARIS_API s_compute_scurve(std::list<SCurveNode>::iterator begin_iter, std::list<SCurveNode>::iterator end_iter, double T_min)->void {
+    auto ARIS_API s_compute_scurve(std::list<SCurveNode>::iterator begin_iter, std::list<SCurveNode>::iterator end_iter, double T_min)->int {
         // 设置正确的 pa, 并检查 vc, a, j 等参数的合理性
         for (auto iter = std::next(begin_iter); iter != end_iter; ++iter) {
             // 设置正确的 pa
@@ -1279,9 +1722,13 @@ namespace aris::plan {
             double Tmin_all = *std::max_element(Tmins.begin(), Tmins.end());
             double Tmax_all = *std::min_element(Tmaxs.begin(), Tmaxs.end());
 
+            // 若起始速度过大，有可能无法规划成功 //
+            if (Tmin_all > Tmax_all)
+                return -1;
+
             // STEP 2 : 基于 T_below 求得 T_upper 上限
             double T_upper = Tmax_all;
-            double T_below = std::max(Tmin_all,0.001);
+            double T_below = std::max(Tmin_all, T_min);
 
             if (T_upper == std::numeric_limits<double>::infinity()) {
                 T_upper = std::max(T_below, 1.0) * 2.0; // in case T_below == 0.0
@@ -1334,6 +1781,16 @@ namespace aris::plan {
                 
             }
         }
+
+        // 针对特定的 CASE 来优化
+        for (auto iter = begin_iter; iter != end_iter && iter != std::prev(end_iter); ++iter) {
+            // 设置正确的 vb_max
+            for (Size i = 0; i < iter->params_.size(); ++i) {
+                s_optimize_ajacent_nodes(iter->params_[i], std::next(iter)->params_[i]);
+            }
+        }
+
+        return 0;
     }
 
     // 计算指定时间处的 p v a j
