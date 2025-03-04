@@ -24,6 +24,15 @@ namespace aris::dynamic {
 	public:
 		static auto Dim()->Size { return 5; }
 		auto virtual dim() const noexcept->Size override { return Dim(); }
+		/**Return RevoluteJoint's constraint matrix in local frame, which
+		 * is a constant equal to 
+		 * 1 0 0 0 0
+		 * 0 1 0 0 0
+		 * 0 0 1 0 0
+		 * 0 0 0 1 0
+		 * 0 0 0 0 1
+		 * 0 0 0 0 0   6 * 5 with rotation axis both in z direction.
+		*/
 		auto virtual locCmI() const noexcept->const double* override;
 		auto virtual cptCpFromPm(double *cp, const double *makI_pm, const double *makJ_pm)const noexcept->void override;
 		auto virtual cptGlbDmFromPm(double *dm, const double *makI_pm, const double *makJ_pm)const noexcept->void override;

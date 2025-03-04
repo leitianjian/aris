@@ -150,12 +150,15 @@ namespace aris::dynamic {
 		auto mpFactor()const noexcept->double;
 		auto setMpFactor(double mp_factor)noexcept->void;
 		
+		// mp: Motion position 电机位置
 		// mp          = mp_internal / mp_offset - mp_offset
 		// mp_internal = (mp + mp_offset) * mp_factor
 		auto mpInternal()const noexcept->double;
 		auto setMpInternal(double mp_internal)noexcept->void;
 
+    // 通过传入的真实 motion 位置，计算内部的 motion 位置
 		auto mp2mpInternal(double mp)const noexcept->double;
+		// 通过传入的内部 motion 位置，计算真实的 motion 位置
 		auto mpInternal2mp(double mp)const noexcept->double;
 
 		virtual ~Motion();

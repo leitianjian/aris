@@ -414,6 +414,9 @@ namespace aris::dynamic{
 		A[at(2, 2, a_t)] = std::cos(angle);
 	}
 	auto inline s_rmy(double angle, double *A) noexcept->void { return s_rmy(angle, A, 3); }
+	
+  // 通过传入的 z 转动的角度，计算得到旋转矩阵
+	// AType: 表示矩阵 A 的数据表示方法如 ColMajor 或 RowMajor
 	template <typename AType>
 	auto inline s_rmz(double angle, double *A, AType a_t) noexcept->void{
 		A[at(0, 0, a_t)] = std::cos(angle);
@@ -644,6 +647,7 @@ namespace aris::dynamic{
 	}
 	auto inline s_permutate_inv(Size m, Size rhs, const Size *p, const double *x, double *y)noexcept->void { s_permutate(m, rhs, p, x, rhs, y, rhs); }
 
+	// Standard Cholesky decomposition (LL^T) of a matrix
 	// A can be the same as L, only when they have same type
 	template<typename AType, typename LType>
 	auto inline s_llt(Size m, const double *A, AType a_t, double *L, LType l_t) noexcept->void{
@@ -668,6 +672,7 @@ namespace aris::dynamic{
 		}
 	}
 	auto inline s_llt(Size m, const double *A, double *L) noexcept->void { s_llt(m, A, m, L, m); };
+	// 用来求解下三角矩阵的逆矩阵
 	// L can be the same as inv_L, only when they have same type
 	template<typename LType, typename InvLType>
 	auto inline s_inv_lm(Size m, const double *L, LType l_t, double *inv_L, InvLType inv_l_t) noexcept->void{
@@ -685,10 +690,12 @@ namespace aris::dynamic{
 		}
 	}
 	auto inline s_inv_lm(Size m, const double *L, double *inv_L) noexcept->void { s_inv_lm(m, L, m, inv_L, m); }
+	// 用来求解上三角矩阵的逆矩阵
 	// U can be the same as inv_U, only when they have same type
 	template<typename LType, typename InvLType>
 	auto inline s_inv_um(Size m, const double *U, LType l_t, double *inv_U, InvLType inv_l_t) noexcept->void { s_inv_lm(m, U, T(l_t), inv_U, T(inv_l_t)); }
 	auto inline s_inv_um(Size m, const double *U, double *inv_U) noexcept->void { s_inv_um(m, U, m, inv_U, m); }
+	// 用来求解下三角矩阵 L * x = b 的 x 的值
 	// b can be the same as x, only when they have same type
 	template<typename LType, typename bType, typename xType>
 	auto inline s_sov_lm(Size m, Size rhs, const double *L, LType l_t, const double *b, bType b_t, double *x, xType x_t, double zero_check = 1e-10) noexcept->void{
@@ -703,6 +710,7 @@ namespace aris::dynamic{
 		}
 	}
 	auto inline s_sov_lm(Size m, Size rhs, const double *L, const double *b, double *x, double zero_check = 1e-10) noexcept->void { s_sov_lm(m, rhs, L, m, b, rhs, x, rhs, zero_check); }
+	// 用来求解上三角矩阵 U * x = b 的 x 的值
 	// b can be the same as x, only when they have same type
 	template<typename LType, typename bType, typename xType>
 	auto inline s_sov_um(Size m, Size rhs, const double *L, LType l_t, const double *b, bType b_t, double *x, xType x_t, double zero_check = 1e-10) noexcept->void{
@@ -719,12 +727,20 @@ namespace aris::dynamic{
 	auto inline s_sov_um(Size m, Size rhs, const double *L, const double *b, double *x, double zero_check = 1e-10) noexcept->void { s_sov_um(m, rhs, L, m, b, rhs, x, rhs, zero_check); }
 
 	// solve decomposition of A
-	//
+	//    A = Q * R
 	//    A :        m x n
+	//    Q :        m x m
+	//    R :        m x n
 	//    U :        m x n
 	//  tau : max(m,n) x 1
 	//
 	//    U can be the same address with A
+	// 矩阵 U 用来储存 Householder 变换的向量 v 与对应的 Q * R 中的 R，其中 R 放在上三角区域，v放在下三角区域，组成一个矩阵 U
+	// A = Q * R
+	// Q = H[0] * H[1] * ... * H[max(m, n)]
+	// H[i] = I - tau[i] v[i] v[i]'
+	// 向量 v 的长度从 max(m, n) 开始减小到 2，由此组成的三角矩阵为 V, 将 V 与 R 共同构成 m * n 大小的矩阵 U
+	// U = [V R]
 	template<typename AType, typename UType, typename TauType>
 	auto inline s_householder_ut(Size m, Size n, const double *A, AType a_t, double *U, UType u_t, double *tau, TauType tau_t, double zero_check = 1e-10)noexcept->void{
 		s_mc(m, n, A, a_t, U, u_t);

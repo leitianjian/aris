@@ -47,22 +47,29 @@ namespace aris::dynamic{
 #define ARIS_LOOP_D_2_TO_END for (auto d = d_data_ + 1; d < d_data_ + d_size_; ++d)
 #define ARIS_LOOP_DIAG_INVERSE_2_TO_END for (auto d = d_data_ + d_size_ - 1; d > d_data_; --d)
 #define ARIS_LOOP_R for (auto r = r_data_; r < r_data_ + r_size_; ++r)
+
 	struct Relation{
 		struct Block { 
 			const Constraint* cst_;
 			bool is_I_;
-			int mot_dim_pos_; // 记录motion的dim pos，-1不是motion，其他为dim pos
-			int mot_mp_pos_;  // 记录motion的mp 的位置（因为 pSize 与 dim 不同）
+			int mot_dim_pos_; // 记录 motion 的 dim pos，值为-1时，不是 motion
+			int mot_mp_pos_;  // 记录 motion 的 mp 的位置idx（因为 pSize 与 dim 不同）
 			double* mp_;
 		};
 
+		// 用于记录Relation的 I J 杆件的指针
 		const Part *prtI_, *prtJ_; // prtI为对角块的part
+		
+		// dim_ 变量表示子系统的Constraints中有最大dim的数值，
+		//      老师在初始化时会进行排序，最大的在第一个
+		// size_ 变量表示子系统的两端有坐标系情况下的约束的 dim()的和
 		Size dim_, size_;
 		
 		Block* blk_data_;
 		Size blk_size_;
 	};
 	struct LocalRelation :public Relation { std::vector<Block> cst_pool_; }; //仅仅为了实现
+	// 关于 Diag 和 Reminder，可以看Imp里面的注释的 Step4，将求解的 yp 与变换后的 C 分成两部分
 	struct Diag{
 		// D * C * P =[I  C]
 		//            [0  0]
@@ -73,14 +80,15 @@ namespace aris::dynamic{
 		double xp_[6], bp_[6], *bc_, *xc_;
 		double *cmI_, *cmJ_, *cmU_, *cmT_; // 因为可能有多个约束，总约束的个数可能超过6，cm维数也不确定
 
-		Size rows_;// in F
+		Size rows_; // number of row in F
 		const Part *part_;
-		Diag *rd_;//related diag, for row addition
+		Diag *rd_; // related diag, for row addition
 		Relation rel_;
 
 		typedef void(*UpdFunc2)(Diag*, bool cpt_cp);
 		UpdFunc2 upd_d_and_cp_;
 	};
+	// 关于 Diag 和 Reminder，可以看Imp里面的注释的 Step4，将求解的 yp 与变换后的 C 分成两部分
 	struct Remainder{
 		struct Block { Diag* diag_; bool is_I_; };
 		Diag *i_diag_, *j_diag_;
@@ -112,12 +120,17 @@ namespace aris::dynamic{
 		// 从模型中跟新数据 //
 		auto updDmCm(bool cpt_cp)noexcept->void;
 		auto updDiagIv()noexcept->void;
+		// 更新 Cv 的数据，与kinVel()方法相关
 		auto updCv()noexcept->void;
+		// 更新 Ca 也就是 bc
 		auto updCa()noexcept->void;
-		// 求解 //
+		// 求解部分 //
 		auto updF()noexcept->void;
+		// 求解 C' * xp = bc 也就是 A x = b
 		auto sovXp()noexcept->void;
+		// 更新 Step6 部分中的 G 矩阵
 		auto updG()noexcept->void;
+		// 应该只有动力学求解使用
 		auto sovXc()noexcept->void;
 		// 接口 //
 		auto kinPos()noexcept->void;
@@ -168,6 +181,7 @@ namespace aris::dynamic{
 			d->upd_d_and_cp_(d, cpt_cp);// cp //
 			d->rows_ = fm_;
 			fm_ += 6 - d->rel_.dim_;
+			// 根据 bc_ 中存储的位置的 error 得到最大的 error。
 			if (cpt_cp)for (Size i{ 0 }; i < d->rel_.size_; ++i) error_ = std::max(error_, std::abs(d->bc_[i]));// error //
 		}
 
@@ -179,6 +193,7 @@ namespace aris::dynamic{
 				s_pm_dot_pm(b->is_I_ ? r->i_diag_->pm_ : r->j_diag_->pm_, *b->cst_->makI()->prtPm(), pmI);
 				s_pm_dot_pm(b->is_I_ ? r->j_diag_->pm_ : r->i_diag_->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 
+				// 计算constraint的 cp 代表的位置偏差并储存在 bc_ 中，只在 kinPos() 使用
 				if (cpt_cp) {
 					if(auto j = dynamic_cast<const aris::dynamic::Joint*>(b->cst_))
 						j->cptCpFromPm(r->bc_ + pos, pmI, pmJ);// cp //
@@ -258,7 +273,7 @@ namespace aris::dynamic{
 			s_mm(6, 1, d->rel_.dim_, d->dm_, T(6), d->bc_, 1, d->xp_, 1);
 		}
 
-		// 构造bcf //
+		// 构造bcf，存在公式 F' * ypf = bcf 在 Step5 //
 		Size cols{ 0 };
 		ARIS_LOOP_R{
 			s_vc(r->rel_.size_, r->bc_, pd_->bcf_ + cols);
@@ -461,6 +476,12 @@ namespace aris::dynamic{
 			s_permutate_inv(d->rel_.size_, 1, d->p_, d->xc_);
 		}
 	}
+	// 老师的正解认为，一个机器人的正解，那些限制住的自由度不会被修改，所以当两个不同
+	// 位置的FixedJoint加入的时候，因为没有自由度可以调整，所以杆件位置不会调整
+	// 如果有需要在没有自由度情况下依旧要根据最小二乘调整的需求，那么就不能使用这个方法
+	// 就看新加入的约束的可信度，如果认为和机器人的连接具有相同的可信度，那么就需要一个
+	// 全局的最小二乘，但是因为我们的接触约束不是真正的刚性约束，所以只需要一个在关节
+	// 空间上的最小二乘解即可，而不是真正的融合了接触位置的最小二乘解。
 	auto SubSystem::kinPos()noexcept->void{
 		updDmCm(true);
 		for (iter_count_ = 0; iter_count_ < max_iter_count_; ++iter_count_){
@@ -475,6 +496,7 @@ namespace aris::dynamic{
 				std::swap(d->pm_, d->last_pm_);
 				double tem[16];
 				s_ps2pm(d->xp_, tem);
+				// last_pm_ * xp_ -> pm_ 解出来的是位置的变化量（最小二乘）
 				s_pm2pm(tem, d->last_pm_, d->pm_);
 			}
 
@@ -482,7 +504,9 @@ namespace aris::dynamic{
 			updDmCm(true);
 
 			// 对于非串联臂，当迭代误差反而再增大时，会主动缩小步长
-			// 只有不是串联臂才会用以下迭代
+			// d_size_ = prt_vec.size()
+			// 只有不是串联臂才会用以下迭代，sys.r_size_ = r_vec.size();
+			// 只有不是串联机械臂才会有非零 r_size_ = rel_vec.size() - prt_vec.size() + 1
 			if (r_size_){
 				// 这里如果用while可以确保每个循环误差都会减小，但是有可能出现卡死
 				if (error_ > last_error) {
@@ -591,7 +615,7 @@ namespace aris::dynamic{
 		//        矩阵D的定义为：  D1_6x6 * C1_6xn = I_6xn   其中n为约束的维数
 		// 
 		//        有地面：
-		//                                                              c1            cn
+		//                                                              cm            cn
 		//        D * P * C = [ I                                      -Cm  ...      -Cn ]
 		//                    |    [ I1 ]                           -D1*Cm  ...          |
 		//                    |    [  0 ]                                                |  r2
@@ -625,14 +649,14 @@ namespace aris::dynamic{
 		//        DPC' 和 yp 为
 		//        有地面：
 		//                            r2        r3                  rm 
-		//        DPC' = [  I                                            ]
-		//               |       [ I1 0 ]                                |
-		//               |                 [ I2 0 ]                      |  
-		//               |                            ...                |
-		//               |                                   [ Im-1 0 ]  |  
-		//               | -Cm'  -Cm'*D1'           Cm'*Di'   Cm'*Dm-1'  |  c1
-		//               | ...      ...       ...   Cj'*Di'     ...      | 
-		//               [ -Cn'             Cn'*D2' Cn'*Di'   Cn'*Dm-1'  ]  cn
+		//        DPC' = [  I                                            ]      [    yp1   ]
+		//               |       [ I1 0 ]                                |      | -------- |
+		//               |                 [ I2 0 ]                      |      | [ ypa2 ] |
+		//               |                            ...                |      | [ ypf2 ] |
+		//               |                                   [ Im-1 0 ]  |      |    ...   |
+		//               | -Cm'  -Cm'*D1'           Cm'*Di'   Cm'*Dm-1'  |  c1  |    ...   |
+		//               | ...      ...       ...   Cj'*Di'     ...      |      | [ ypam ] |
+		//               [ -Cn'             Cn'*D2' Cn'*Di'   Cn'*Dm-1'  ]  cn  [ [ ypfm ] ]
 		// 
 		//        无地面：
 		//                            r2        r3                  rm 
@@ -667,8 +691,8 @@ namespace aris::dynamic{
 		//        | ypa3 |     |  bc2  |
 		//        |  ... |     |  ...  |
 		//        [ ypam ]     [ bcm-1 ]
+		//
 		//        yp中的另外一部分需要用上文中的 F 来求，下文中的k是对应约束的维数：
-		//        
 		//        F * [ ypf2 ]  =  [  bcm  ]   -   [ -Cm'  * D1(1:k,1:6)' * bc1 + ... + Cm'  * Dm-1(1:k,1:6)' * bcm-1 ]
 		//            | ypf3 |     | bcm+1 |       |  Cm+1'* D1(1:k,1:6)' * bc1 + ... + Cm+1'* Dm-1(1:k,1:6)' * bcm-1 |
 		//            |  ... |     |  ...  |       |                              ...                                 |
@@ -682,7 +706,8 @@ namespace aris::dynamic{
 		//        
 		//        在实际的计算中，可以先将xp设为   D1(1:k,1:6)'*bc1，从而减少计算
 		// --------------------------------------------------------------------
-		// step 5:求解方程F' * ypf = bcf 的特解 xpf 和通解 S
+		// step 5:求解方程 F' * ypf = bcf 的特解 xpf 和通解 S
+		//        这里的 F' 是从 F 矩阵中取出了一部分元素组成的矩阵，因为 yp 中的一部分已经求出来了
 		//
 		//        F * P = Q * R
 		//        这里R为：[R1 R2 | 0 0]
@@ -827,9 +852,11 @@ namespace aris::dynamic{
 				auto m = static_cast<const Motion*>(d->rel_.blk_data_[1].cst_);
 				
 				double rm[9], pm_j_should_be[16];
+				// 根据旋转关节的真实的 z 轴的转动，计算得到旋转矩阵 rm 
 				s_rmz(m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), rm);
 
 				s_vc(16, pmJ, pm_j_should_be);
+				// pmJ * rm -> pm_j_should_be 旋转矩阵相乘
 				s_mm(3, 3, 3, pmJ, 4, rm, 3, pm_j_should_be, 4);
 
 				double pm_j2i[16], ps_j2i[6];
@@ -871,6 +898,7 @@ namespace aris::dynamic{
 				d->bc_[5] = ps_j2i[m->axis()];
 			}
 		}
+		// 针对 Joint 和 Motion 约束的更新 diag 和 cp 的泛化版本的方法。
 		static auto normal_upd_d_and_cp(Diag *d, bool cpt_cp)noexcept->void	{
 			Size pos{ 0 };
 			ARIS_LOOP_BLOCK(d->rel_.){
@@ -892,7 +920,7 @@ namespace aris::dynamic{
 				// 计算 dm //
 				double cmI_tem[36], cmJ_tem[36];
 				b->cst_->cptGlbCmFromPm(cmI_tem, cmJ_tem, pmI, pmJ);
-
+				// 使用计算的 Constraint matrix，更新 d->cmI_ 和 d->cmJ_
 				s_mc(6, b->cst_->dim(), cmI_tem, b->cst_->dim(), (b->is_I_ ? d->cmI_ : d->cmJ_) + pos, d->rel_.size_);
 				s_mc(6, b->cst_->dim(), cmJ_tem, b->cst_->dim(), (b->is_I_ ? d->cmJ_ : d->cmI_) + pos, d->rel_.size_);
 				pos += b->cst_->dim();
@@ -1414,6 +1442,7 @@ namespace aris::dynamic{
 	auto UniversalSolver::kinPos()->int{
 		kinPosSetMotionPosFromModel();
 		if (auto ret = kinPosCompute())
+		  // error not converge with iteration
 			return ret;
 		else {
 			kinPosUpdateModel();
@@ -1806,6 +1835,8 @@ namespace aris::dynamic{
 #undef ARIS_LOOP_SYS_R
 #undef ARIS_LOOP_BLOCK
 
+	// 在创建的时候记录 prt jnt mot gm fce 的激活状态
+	// 并在销毁的时候将记录的状态设置回去，放置在方法调用时放置过程中修改导致的状态不一致
 	class HelpResetRAII{
 	public:
 		std::vector<bool> prt_active_, jnt_active_, mot_active_, gm_active_, fce_active_;

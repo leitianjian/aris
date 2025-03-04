@@ -40,7 +40,8 @@ namespace aris::dynamic{
 		cp[0] = pm_j_in_i[3];
 		cp[1] = pm_j_in_i[7];
 		cp[2] = pm_j_in_i[11];
-
+		// 因为旋转关节的z轴是自由的，那么要判断 x转轴与y转轴的约束冲突的大小
+		// 就可以用两个关节的z轴的叉乘来判断他们在 x方向与 y方向约束冲突的大小
 		// 这里用i的z轴叉乘j的z轴，在i坐标系下，因此叉乘出来有如下结果:
 		cp[3] = -pm_j_in_i[6];
 		cp[4] = pm_j_in_i[2];
@@ -68,8 +69,6 @@ namespace aris::dynamic{
 			else if(pitch_compensation < -pitch_ / 2)
 				pitch_compensation += pitch_;
 		}
-
-
 
 		cp[0] = pm_j_in_i[3];
 		cp[1] = pm_j_in_i[7];

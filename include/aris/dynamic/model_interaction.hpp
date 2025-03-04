@@ -14,7 +14,7 @@ namespace aris::dynamic{
 		auto setMakI(Marker* mak_i) noexcept->void { makI_ = mak_i; }
 		auto makI() noexcept->Marker* { return makI_; }
 		auto makI() const noexcept->const Marker* { return makI_; }
-		auto setMakJ(Marker* mak_j) noexcept->void { makI_ = mak_j; }
+		auto setMakJ(Marker* mak_j) noexcept->void { makJ_ = mak_j; }
 		auto makJ() noexcept->Marker* { return makJ_; }
 		auto makJ() const noexcept->const Marker* { return makJ_; }
 		auto prtNameM()const->std::string;
