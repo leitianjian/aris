@@ -74,7 +74,7 @@ namespace aris::dynamic {
 	};
 
 	// 单位末端，电机或直线电机 //
-	class ARIS_API Motion final :public MotionBase{
+	class ARIS_API Motion :public MotionBase{
 	public:
 		static auto Dim()->Size { return 1; }
 		auto virtual eeType()const->EEType override { return axis() < 3 ? EEType::X : EEType::A; }

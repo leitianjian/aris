@@ -132,10 +132,14 @@ namespace aris::dynamic{
 		auto updG()noexcept->void;
 		// 应该只有动力学求解使用
 		auto sovXc()noexcept->void;
+		auto sovProjectMassMatrix()noexcept->void;
+		auto sovXcRemain()noexcept->void;
 		// 接口 //
 		auto kinPos()noexcept->void;
 		auto kinVel()noexcept->void;
 		auto dynAccAndFce()noexcept->void;
+		auto cptJacobiBeta(std::vector<Size>& targetBodies, 
+		std::vector<double>& target_xp)noexcept->void;
 	};
 	struct PublicData{
 		// 激活的驱动 //
@@ -475,6 +479,187 @@ namespace aris::dynamic{
 			std::fill(d->xc_ + d->rel_.dim_, d->xc_ + d->rel_.size_, 0.0);
 			s_permutate_inv(d->rel_.size_, 1, d->p_, d->xc_);
 		}
+	}
+	auto SubSystem::sovProjectMassMatrix()noexcept->void{
+		/////////////////////////////////// 求解beta /////////////////////////////////////////////////////////////
+		//// 更新每个杆件的力 pf ////
+		ARIS_LOOP_D	{
+			// 外力（不包括惯性力）已经储存在了bp中，但为了后续可能存在的修正，这里将其与惯性力之和暂存到 last_pm_ 中 //
+			
+			// v x I * v //
+			double I_dot_v[6];
+			s_iv_dot_as(d->iv_, d->part_->vs(), I_dot_v);
+			s_cfa(d->part_->vs(), I_dot_v, d->bp_);
+			s_vc(6, d->bp_, d->last_pm_); // 暂存处理
+
+			// I*(a-g) //
+			double as_minus_g[6], iv_dot_as[6];
+			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vs(6, pd_->gravity_, as_minus_g);
+			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
+			s_va(6, iv_dot_as, d->bp_);
+		}
+
+		//// P*bp  对bp做行加变换，并取出bcf ////
+		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
+			// 行变换
+			s_va(6, d->bp_, d->rd_->bp_);
+
+			// 取出bcf
+			double tem[6];
+			s_mm(6, 1, 6, d->dm_, 6, d->bp_, 1, tem, 1);
+			s_vc(6, tem, d->bp_);
+			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
+		}
+
+		//// 根据G求解S解空间的beta, 先把beta都弄成它的右侧未知量 ////
+		if (!hasGround())s_vc(6, d_data_[0].bp_, pd_->beta_ + fm_);//这一项实际是把无地面的xp拷贝到beta中
+		s_householder_ut_qt_dot(fm_, fr_, 1, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->bpf_, 1, pd_->beta_, 1);
+
+		//// 求QT_DOT_G ////
+		// G 和 QT_DOT_G位于同一片内存，因此不需要以下第一句
+		// if (!hasGround())s_mc(gm - fm_, gn_, G + at(fm_, 0, gn_), QT_DOT_G + at(fm_, 0, gn_)); // 这一项实际是把无地面产生的G拷贝到QT_DOT_G中
+		s_householder_ut_qt_dot(fm_, fr_, gn_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->G_, gn_, pd_->QT_DOT_G_, gn_);
+	}
+	auto SubSystem::sovXcRemain()noexcept->void{
+		///////////////////////////////
+		// 求解之前通解的解的系数 beta
+		// 可以通过rank == m-r来判断质点等是否影响计算
+		///////////////////////////////
+		Size rank;
+		s_householder_utp(gn_, gn_, pd_->QT_DOT_G_ + at(fr_, 0, gn_), pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, rank, max_error_);
+		s_householder_utp_sov(gn_, gn_, 1, rank, pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, pd_->beta_ + fr_, pd_->beta_);
+
+		/////////////////////////////////// 求解xp /////////////////////////////////////////////////////////////
+		//// 重新求解 xp ，这次考虑惯量 ////
+		// 根据特解更新 xpf 以及无地面处的特解（杆件1速度之前可以随便设）
+		s_mms(fm_, 1, fm_ - fr_, pd_->S_, pd_->beta_, pd_->xpf_);
+		if (!hasGround())s_vi(6, pd_->beta_ + fm_ - fr_, d_data_[0].xp_);
+		// 将xpf更新到xp，先乘以D' 再乘以 P'
+		ARIS_LOOP_D_2_TO_END {
+			// 结合bc 并乘以D'
+			s_mm(6, 1, d->rel_.dim_, d->dm_, ColMajor{ 6 }, d->bc_, 1, d->xp_, 1);
+			s_mma(6, 1, 6 - d->rel_.dim_, d->dm_ + at(0, d->rel_.dim_, T(6)), T(6), pd_->xpf_ + d->rows_, 1, d->xp_, 1);
+
+			// 乘以P'
+			s_va(6, d->rd_->xp_, d->xp_);
+		}
+
+		/////////////////////////////////// 求解xc /////////////////////////////////////////////////////////////
+		// 因为上文中 xp 可能不是真实解，这里重新做循环计算
+		//// 更新每个杆件的力 pf ////
+		ARIS_LOOP_D {
+			// 取出之前暂存的外力 //
+			s_vc(6, d->last_pm_, d->bp_);
+
+			// I*(a-g) //
+			double as_minus_g[6], iv_dot_as[6];
+			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vs(6, pd_->gravity_, as_minus_g);
+			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
+			s_va(6, iv_dot_as, d->bp_);
+		}
+
+		//// P*bp  对bp做行加变换 ////
+		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
+			s_va(6, d->bp_, d->rd_->bp_);
+			
+			double tem[6];
+			s_mm(6, 1, 6, d->dm_, 6, d->bp_, 1, tem, 1);
+			s_vc(6, tem, d->bp_);
+			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
+		}
+		
+		// 求解xcf //
+		s_householder_utp_sov(fm_, fn_, 1, fr_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->FP_, pd_->bpf_, 1, pd_->xcf_, 1, max_error_);
+
+		// 将已经求出的x更新到remainder中，此后将已知数移到右侧
+		Size cols{ 0 };
+		ARIS_LOOP_R {
+			s_vc(r->rel_.size_, pd_->xcf_ + cols, r->xc_);
+
+			// 更新待求
+			ARIS_LOOP_BLOCK(r->){
+				double tem[6];
+				s_mm(6, 1, r->rel_.size_, b->is_I_ ? r->cmJ_ : r->cmI_, pd_->xcf_ + cols, tem);
+				s_mma(6, 1, 6, b->diag_->dm_, 6, tem, 1, b->diag_->bp_, 1);
+			}
+
+			cols += r->rel_.size_;
+		}
+		ARIS_LOOP_D_2_TO_END {
+			s_vc(d->rel_.dim_, d->bp_, d->xc_);
+			std::fill(d->xc_ + d->rel_.dim_, d->xc_ + d->rel_.size_, 0.0);
+			s_permutate_inv(d->rel_.size_, 1, d->p_, d->xc_);
+		}
+	}
+	
+	auto SubSystem::cptJacobiBeta(std::vector<Size>& targetBodies, 
+		std::vector<double>& target_xp) noexcept -> void {
+    const bool grounded = hasGround();
+    const int n_beta = grounded ? (fm_ - fr_) : (fm_ + 6 - fr_);
+    const int n_body6 = 6 * d_size_;   // 行数 = 刚体数 * 6
+
+    // 保存当前速度状态（以便恢复）
+    std::vector<double> save_xp(n_body6, 0.0);
+    for (int b = 0; b < d_size_; ++b)
+      s_vc(6, d_data_[b].xp_, save_xp.data() + 6 * b);
+
+    // 将所有刚体速度清零，并清空运动副速度误差（bc）
+    // ARIS_LOOP_R std::fill_n(r->bc_, r->rel_.size_, 0.0);
+
+    // 临时数组：xpf 长度 fm_
+    std::vector<double> xpf(fm_, 0.0);
+
+    // 逐列扰动 β
+    for (int j = 0; j < n_beta; ++j) {
+      // 每列开始前，清零所有刚体速度（基线为零）
+    	ARIS_LOOP_D std::fill_n(d->xp_, 6, 0.0);
+
+      if (j < fm_ - fr_) {
+        // 内部运动自由度（通过 S 矩阵作用）
+        // 构造 β 扰动向量 = e_j (长度 fm_ - fr_)
+        std::vector<double> beta_pert(fm_ - fr_, 0.0);
+        beta_pert[j] = 1.0;
+
+        // xpf = S * beta_pert
+        // 注：pd_->S_ 列优先存储，维度 fm_ × (fm_-fr_)
+        s_mms(fm_, 1, fm_ - fr_, pd_->S_, beta_pert.data(), xpf.data());
+
+        // 将 xpf 转换为各刚体速度（基数杆件保持 0）
+				ARIS_LOOP_D_2_TO_END{
+          // D' * xpf_sub
+          s_mma(6, 1, 6 - d->rel_.dim_,
+                d->dm_ + at(0, d->rel_.dim_, T(6)), T(6),
+                xpf.data() + d->rows_, 1,
+                d->xp_, 1);
+          // P' 行变换（正向传播）
+          s_va(6, d->rd_->xp_, d->xp_);
+        }
+      } else {
+        // 无地面时的基座运动自由度（6 维）
+        int base_idx = j - (fm_ - fr_);   // 0..5
+
+        // 直接设置基座刚体速度为单位向量 e_{base_idx}
+        d_data_[0].xp_[base_idx] = 1.0;
+
+        // 正向运动学传播基座速度到所有从属刚体
+				ARIS_LOOP_D_2_TO_END{
+          // rd_->xp_ 封装了从父到子的速度变换
+          s_va(6, d->rd_->xp_, d->xp_);
+        }
+      }
+
+      // 提取目标刚体速度
+      for (Size t = 0; t < targetBodies.size(); ++t) {
+        int b = targetBodies[t];
+        std::copy_n(d_data_[b].xp_, 6, target_xp.data() + 6*t);
+      }
+    }
+
+    // 恢复速度状态
+    for (int b = 0; b < d_size_; ++b)
+      s_vc(6, save_xp.data() + 6 * b, d_data_[b].xp_);
 	}
 	// 老师的正解认为，一个机器人的正解，那些限制住的自由度不会被修改，所以当两个不同
 	// 位置的FixedJoint加入的时候，因为没有自由度可以调整，所以杆件位置不会调整
@@ -1827,6 +2012,312 @@ namespace aris::dynamic{
 	auto UniversalSolver::nM()const noexcept->Size { return imp_->pd_->nM_; }
 	auto UniversalSolver::M()const noexcept->const double * { return imp_->pd_->M_; }
 	auto UniversalSolver::h()const noexcept->const double * { return imp_->pd_->h_; }
+	auto UniversalSolver::cptProjectedMassMatrix() noexcept -> void {
+		// 方法 1，直接构造法
+// 		auto M = imp_->pd_->M_;
+// 		auto h = imp_->pd_->h_;
+		
+// 		// init //
+// 		std::fill(M, M + nM()* nM(), 0.0);
+// 		std::fill(h, h + nM(), 0.0);
+
+// 		ARIS_LOOP_SYS{
+// 			ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
+			
+// 			// 动力学计算，和dynAccAndFce() 一模一样 //
+// 			sys->updDiagIv();
+// 			sys->updDmCm(false);
+
+// 			sys->updF();
+// 			sys->updG();
+// 			sys->updCa();
+// 		// 在 updG() 开头分配 K 和 M_beta_K
+// Eigen::MatrixXd M_beta_K(d, d);
+// std::vector<std::vector<Eigen::Vector6d>> K_cols(d, std::vector<Eigen::Vector6d>(d_size_));
+
+// for (Size j = 0; j < d; ++j) {
+//     // ... 现有代码：设置 xpf，变换得到 xp（但先不乘以 I）...
+//     // 保存 K 的第 j 列
+//     for (Size i = 0; i < d_size_; ++i) {
+//         K_cols[j][i] = Eigen::Vector6d(d_data_[i].xp_);
+//     }
+//     // 然后乘以 I 并继续构造 G ...
+// }
+
+// // 组装 M_beta_K
+// for (Size i = 0; i < d; ++i) {
+//     for (Size j = 0; j <= i; ++j) {
+//         double val = 0.0;
+//         for (Size part = 0; part < d_size_; ++part) {
+//             // 计算 f_j_part = I_part * K_cols[j][part]
+//             Eigen::Vector6d f_j_part;
+//             s_iv_dot_as(d_data_[part].iv_, K_cols[j][part].data(), f_j_part.data());
+//             val += K_cols[i][part].dot(f_j_part);
+//         }
+//         M_beta_K(i, j) = val;
+//         M_beta_K(j, i) = val;
+//     }
+// }
+		// 方法2，通过矩阵G直接推导法
+		ARIS_LOOP_SYS{
+			ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
+			
+			// 动力学计算，和dynAccAndFce() 一模一样 //
+			sys->updDiagIv();
+			sys->updDmCm(false);
+
+			sys->updF();
+			sys->updG();
+			sys->updCa();
+			sys->sovXp();
+			sys->sovProjectMassMatrix();
+			aris::dynamic::dsp(sys->gn_, sys->gn_, sys->pd_->QT_DOT_G_);
+		}
+	}
+	auto UniversalSolver::cptContactInverseInertiaMatrix(int nContact, int* partid, double* T_vec,
+		double* contactPoint, std::vector<double>& A_out, std::vector<double>& accel0) noexcept -> void {
+		auto* pd = imp_->pd_;
+    int num_subsys = pd->subsys_size_;
+    SubSystem* subsys = pd->subsys_data_;
+		int ground_id = model()->ground().id();
+
+		auto inverse_pd = [](Size m, double* A) {
+		  // 假设A和invA都是按行主元存储，leading dimension 为 m
+		  std::vector<double> L(m * m);
+		  s_llt(m, A, m, L.data(), m);  // A = L * L^T
+		  std::vector<double> invL(m * m);
+		  s_inv_lm(m, L.data(), m, invL.data(), m);  // invL = L^{-1}
+		  // 计算 invA = invL^T * invL
+		  // 使用s_mm: C = alpha * A * B, 这里 alpha=1, A = invL^T (列主元？), B = invL (行主元)
+		  // s_mm 函数签名: s_mm(m, n, k, alpha, A, a_t, B, b_t, C, c_t)
+		  // 我们计算 m x m 矩阵 invL^T * invL:
+		  //  A是invL的转置，即以列主元看待invL，即 a_t = T(m) (因为转置后leading dim是m，而实际上aris的T(ColMajor(m)) 或者 T(m) 对应列主元)
+		  // 或者我们可以直接循环或使用s_mm并提供合适的类型。
+		  // 简便方法：注意到invA是对称的，可以用s_mm(m, m, m, invL, m, invL, T(m), invA, m)？需要检查。
+		  // 在aris中，invL按行主元存储，即RowMajor(m)。其转置相当于ColMajor(m)。所以在s_mm中，我们可以指定a_t = T(m) (即ColMajor)，b_t = m (RowMajor)，c_t = m。
+		  s_mm(m, m, m, 1.0, invL.data(), T(m), invL.data(), m, A, m);
+		};
+		// 2. 确定每个接触中两个物体各自所在的子系统及局部刚体索引
+    struct ContactInfo {
+      int sys1, sys2;          // 子系统索引，-1 表示该物体为地面
+      int local_body1, local_body2; // 在子系统 d_data_ 内的索引，地面无意义
+			double* T;
+      double* pt;
+    };
+    std::vector<ContactInfo> contact_info(nContact);
+   	for (int ic = 0; ic < nContact; ++ic) {
+			int p1 = partid[2 * ic], p2 = partid[2 * ic + 1];
+      // 查找所属子系统
+      int s1 = -1, s2 = -1, lb1 = -1, lb2 = -1;
+			if (p1 == ground_id) 
+				s1 = -1;
+			else {
+      	Diag* d1 = pd->get_diag_from_part_id_[partid[2 * ic]];
+      	ARIS_LOOP_SYS {
+      	  if (d1 >= sys->d_data_ && d1 < sys->d_data_ + sys->d_size_) {
+      	    s1 = sys - subsys; lb1 = d1 - subsys->d_data_; break;
+      	  }
+      	}
+			}
+			if (p2 == ground_id)
+				s2 = -1;
+			else {
+      	Diag* d2 = pd->get_diag_from_part_id_[partid[2 * ic + 1]];
+      	ARIS_LOOP_SYS {
+          if (d2 >= sys->d_data_ && d2 < sys->d_data_ + sys->d_size_) {
+            s2 = sys - subsys; lb2 = d2 - subsys->d_data_; break;
+          }
+      	}
+			}
+			contact_info[ic] = {s1, s2, lb1, lb2, {T_vec + ic * 16}, {contactPoint + 3*ic}};
+    }
+    // 3. 分配输出矩阵
+    const int rows_per_contact = 6;   // 物体1:3行，物体2:3行
+    const int J_rows = rows_per_contact * nContact;
+    A_out.resize(J_rows * J_rows, 0.0);
+
+		// 收集本子系统涉及的非地面物体任务
+    struct Task {
+      int contact_idx;   // 全局接触编号
+      int obj_idx;       // 0 表示物体1，1 表示物体2
+      int local_body;    // 在该子系统内的刚体索引
+			double* T;
+      double* point;
+    };
+		ARIS_LOOP_SYS ARIS_LOOP_SYS_D {
+			d->part_->getPm(d->pm_);
+			std::fill(d->bp_, d->bp_ + 6, 0.0);
+		}
+		// 更新外力 //
+		for (auto &fce : model()->forcePool()){
+			if (fce.active()){
+				double fsI[6], fsJ[6];
+				fce.cptGlbFs(fsI, fsJ);
+
+				if (&fce.makI()->fatherPart() != &model()->ground()) 
+					s_vs(6, fsI, imp_->pd_->get_diag_from_part_id_[fce.makI()->fatherPart().id()]->bp_);
+				
+				if (&fce.makJ()->fatherPart() != &model()->ground())
+					s_vs(6, fsJ, imp_->pd_->get_diag_from_part_id_[fce.makJ()->fatherPart().id()]->bp_);
+			}
+		}
+		// 更新地面的as //
+		s_fill(6, 1, 0.0, const_cast<double *>(model()->ground().as()));
+
+		ARIS_LOOP_SYS{
+			std::vector<Task> tasks;
+    	std::set<int> involvedLocalBodies;
+			Size s = sys - subsys;
+    	for (int ic = 0; ic < nContact; ++ic) {
+    	  const auto& info = contact_info[ic];
+    	  if (info.sys1 == s) {  // 只有非地面（sys1 != -1）
+    	    tasks.push_back({ic, 0, info.local_body1, info.T, info.pt});
+    	    involvedLocalBodies.insert(info.local_body1);
+    	  }
+    	  if (info.sys2 == s) {
+    	    tasks.push_back({ic, 1, info.local_body2, info.T, info.pt});
+    	    involvedLocalBodies.insert(info.local_body2);
+    	  }
+    	}
+			if (tasks.empty()) continue;  // 该子系统无相关非地面物体
+
+			// ARIS_LOOP_SYS_D {
+			// 	d->part_->getPm(d->pm_); 
+			// 	// std::fill(d->bp_, d->bp_ + 6, 0.0);
+			// }
+			
+			// 动力学计算，和dynAccAndFce() 一模一样 //
+			sys->updDiagIv();
+			sys->updDmCm(false);
+
+			sys->updF();
+			sys->updG();
+			sys->updCa();
+			sys->sovXp();
+			sys->sovProjectMassMatrix();
+			Size gn = sys->gn_;
+			std::vector<double> invM_beta(gn * gn);
+			aris::dynamic::s_vc(gn * gn, sys->pd_->QT_DOT_G_, invM_beta.data());
+			// aris::dynamic::dsp(gn, gn, invM_beta.data());
+			inverse_pd(gn, invM_beta.data());
+			// aris::dynamic::dsp(gn, gn, invM_beta.data());
+
+			// ---- 4.3 数值扰动 β，提取所需物体的点雅可比 ----
+      std::vector<Size> targetBodies(involvedLocalBodies.begin(), involvedLocalBodies.end());
+      std::unordered_map<int,int> bodyToPos;
+      for (size_t t = 0; t < targetBodies.size(); ++t)
+        bodyToPos[targetBodies[t]] = t;
+
+       // 保存/清零速度
+      std::vector<std::array<double,6>> save_xp(sys->d_size_);
+      for (int b = 0; b < sys->d_size_; ++b)
+        std::copy_n(sys->d_data_[b].xp_, 6, save_xp[b].begin());
+
+			// ---- 3.3 构建本子系统的雅可比片段 J_sub (J_rows × n_beta) ----
+      std::vector<double> J_sub(J_rows * gn, 0.0);
+      std::vector<double> xpf(sys->fm_, 0.0);
+      std::vector<double> target_xp(targetBodies.size() * 6);
+
+      // 扰动 β
+      for (int j = 0; j < sys->gn_; ++j) {
+        for (int b = 0; b < sys->d_size_; ++b)
+          std::fill_n(sys->d_data_[b].xp_, 6, 0.0);
+
+        if (j < sys->fm_ - sys->fr_) {
+          std::vector<double> beta_pert(sys->fm_ - sys->fr_, 0.0);
+          beta_pert[j] = 1.0;
+          s_mm(sys->fm_, 1, sys->fm_ - sys->fr_, sys->pd_->S_, beta_pert.data(), xpf.data());
+          for (auto d = sys->d_data_ + 1; d < sys->d_data_ + sys->d_size_; ++d) {
+            s_mma(6, 1, 6 - d->rel_.dim_,
+                  d->dm_ + at(0, d->rel_.dim_, T(6)), T(6),
+                  xpf.data() + d->rows_, 1, d->xp_, 1);
+            s_va(6, d->rd_->xp_, d->xp_);
+          }
+        } else {
+          int base_idx = j - (sys->fm_ - sys->fr_);
+          sys->d_data_[0].xp_[base_idx] = 1.0;
+          for (auto d = sys->d_data_ + 1; d < sys->d_data_ + sys->d_size_; ++d) {
+            s_va(6, d->rd_->xp_, d->xp_);
+          }
+        }
+
+        // 提取目标刚体速度
+        for (size_t t = 0; t < targetBodies.size(); ++t) {
+          int b = targetBodies[t];
+          std::copy_n(sys->d_data_[b].xp_, 6, target_xp.data() + 6*t);
+        }
+
+        // 填入 J_sub 的第 j 列
+        for (const auto& task : tasks) {
+          int pos = bodyToPos[task.local_body];
+          const double* v = target_xp.data() + 6*pos;
+					double vp_o[3], vp_c[3];
+					s_vs2vp(v, task.point, vp_o);
+          // double wx = v[3], wy = v[4], wz = v[5];
+          // double cross_x = wy * task.point[2] - wz * task.point[1];
+          // double cross_y = wz * task.point[0] - wx * task.point[2];
+          // double cross_z = wx * task.point[1] - wy * task.point[0];
+          // double vel_x = v[0] + cross_x;
+          // double vel_y = v[1] + cross_y;
+          // double vel_z = v[2] + cross_z;
+
+					s_inv_pm_dot_v3(task.T, vp_o, vp_c);
+          int row0 = task.contact_idx * 6 + task.obj_idx * 3;
+          J_sub[(row0 + 0) * gn + j] = vp_c[0];
+          J_sub[(row0 + 1) * gn + j] = vp_c[1];
+          J_sub[(row0 + 2) * gn + j] = vp_c[2];
+        }
+      }
+
+      // 恢复速度
+      for (int b = 0; b < sys->d_size_; ++b)
+        std::copy_n(save_xp[b].begin(), 6, sys->d_data_[b].xp_);
+
+      // ---- 3.4 累加 A += J_sub * M_inv * J_sub^T ----
+      for (int i = 0; i < J_rows; ++i) {
+        for (int k = 0; k < gn; ++k) {
+          double tmp = 0.0;
+          for (int l = 0; l < gn; ++l)
+            tmp += J_sub[i * gn + l] * invM_beta[l * gn + k];
+          for (int j = i; j < J_rows; ++j) 
+            A_out[i * J_rows + j] += tmp * J_sub[j * gn + k];
+        }
+      }
+			sys->sovXcRemain();
+    }
+		
+    // 对称填充下三角
+    for (int i = 0; i < J_rows; ++i)
+      for (int j = i+1; j < J_rows; ++j)
+        A_out[j * J_rows + i] = A_out[i * J_rows + j];
+
+		// ARIS_LOOP_SYS sys->dynAccAndFce();
+
+		// 计算成功，设置各关节和杆件
+		ARIS_LOOP_SYS 
+			ARIS_LOOP_SYS_D 
+				s_vc(6, d->xp_, const_cast<double*>(d->part_->as()));
+		
+		// dynAccAndFce();
+		accel0.resize(J_rows, 0.0);
+		for (int ic = 0; ic < nContact; ++ic) {
+			if (contact_info[ic].sys1 != -1) {
+				// auto& d = subsys[contact_info[ic].sys1].d_data_[contact_info[ic].local_body1];
+				auto& part = model()->partPool()[partid[2 * ic]];
+				double ap_o[3];
+				s_as2ap(part.vs(), part.as(), contact_info[ic].pt, ap_o);
+				s_inv_pm_dot_v3(contact_info[ic].T, ap_o, accel0.data() + ic * rows_per_contact);
+			}
+			if (contact_info[ic].sys2 != -1) {
+				// auto& d = subsys[contact_info[ic].sys2].d_data_[contact_info[ic].local_body2];
+				auto& part = model()->partPool()[partid[2 * ic + 1]];
+				double ap_o[3];
+				s_as2ap(part.vs(), part.as(), contact_info[ic].pt, ap_o);
+				s_inv_pm_dot_v3(contact_info[ic].T, ap_o, accel0.data() + ic * rows_per_contact + 3);
+			}
+		}
+		return;
+	}
 	UniversalSolver::~UniversalSolver() = default;
 	UniversalSolver::UniversalSolver(Size max_iter_count, double max_error) :Solver(max_iter_count, max_error) {}
 	ARIS_DEFINE_BIG_FOUR_CPP(UniversalSolver);
@@ -2042,6 +2533,11 @@ namespace aris::dynamic{
 	InverseKinematicSolver::InverseKinematicSolver(Size max_iter_count, double max_error) :UniversalSolver(max_iter_count, max_error), imp_(new Imp) {}
 	ARIS_DEFINE_BIG_FOUR_CPP(InverseKinematicSolver);
 
+	struct ForwardDynamicSolver::Imp{
+		double* MBeta_{ nullptr }, * ci_{ nullptr };
+		std::vector<char> mem_pool_;
+		aris::Size mJi_{ 0 }, nJi_{ 0 };
+	};
 	auto ForwardDynamicSolver::allocateMemory()->void{
 		HelpResetRAII help_reset(this->model());
 		
@@ -2066,6 +2562,15 @@ namespace aris::dynamic{
 		UniversalSolver::dynAccAndFce();
 		for (auto &m : model()->generalMotionPool())m.updA();
 		return 0;
+	}
+	auto ForwardDynamicSolver::cptProjectedMassMatrix() noexcept -> void {
+		UniversalSolver::cptProjectedMassMatrix();
+		return;
+	}
+	auto ForwardDynamicSolver::cptContactInverseInertiaMatrix(int nContact, int* partid, 
+		double* T_vec, double* contactPoint, std::vector<double>& A_out, std::vector<double>& accel0) noexcept -> void {
+		UniversalSolver::cptContactInverseInertiaMatrix(nContact, partid, T_vec, contactPoint, A_out, accel0);
+		return;
 	}
 	ForwardDynamicSolver::~ForwardDynamicSolver() = default;
 	ForwardDynamicSolver::ForwardDynamicSolver(Size max_iter_count, double max_error) :UniversalSolver(max_iter_count, max_error) {}

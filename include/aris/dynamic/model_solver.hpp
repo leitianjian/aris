@@ -67,6 +67,9 @@ namespace aris::dynamic
 		auto nM()const noexcept->Size;// = sum of all active motion dimension
 		auto M()const noexcept->const double *;// dimension : nM x nM 
 		auto h()const noexcept->const double *;// dimension : nM x 1
+		auto cptProjectedMassMatrix() noexcept->void; // M_proj = Jg * M^-1 * Jg^T
+		auto cptContactInverseInertiaMatrix(int nContact, int* partid, double* T_vec, 
+			double* contactPoint, std::vector<double>& A_out, std::vector<double>& accel0) noexcept -> void;
 
 		virtual ~UniversalSolver();
 		explicit UniversalSolver(Size max_iter_count = 100, double max_error = 1e-10);
@@ -120,16 +123,24 @@ namespace aris::dynamic
 		struct Imp;
 		aris::core::ImpPtr<Imp> imp_;
 	};
-	class ARIS_API ForwardDynamicSolver :public UniversalSolver{
-	public:
-		auto virtual allocateMemory()->void override;
-		auto virtual kinPos()->int override;
-		auto virtual kinVel()->int override;
-		auto virtual dynAccAndFce()->int override;
+	class ARIS_API ForwardDynamicSolver : public UniversalSolver {
+	 public:
+	  auto virtual allocateMemory() -> void override;
+	  auto virtual kinPos() -> int override;
+	  auto virtual kinVel() -> int override;
+	  auto virtual dynAccAndFce() -> int override;
 
-		virtual ~ForwardDynamicSolver();
-		explicit ForwardDynamicSolver(Size max_iter_count = 100, double max_error = 1e-10);
-		ARIS_DECLARE_BIG_FOUR(ForwardDynamicSolver);
+	  auto cptProjectedMassMatrix() noexcept -> void;
+		auto cptContactInverseInertiaMatrix(int nContact, int* partid, double* T_vec,
+			double* contactPoint, std::vector<double>& A_out, std::vector<double>& accel0) noexcept -> void;
+	  virtual ~ForwardDynamicSolver();
+	  explicit ForwardDynamicSolver(Size max_iter_count = 100,
+	                                double max_error = 1e-10);
+	  ARIS_DECLARE_BIG_FOUR(ForwardDynamicSolver);
+
+	 private:
+	  struct Imp;
+	  aris::core::ImpPtr<Imp> imp_;
 	};
 	class ARIS_API InverseDynamicSolver :public UniversalSolver{
 	public:
