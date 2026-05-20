@@ -52,33 +52,33 @@ namespace aris::dynamic{
 		struct Block { 
 			const Constraint* cst_;
 			bool is_I_;
-			int mot_dim_pos_; // 记录 motion 的 dim pos，值为-1时，不是 motion
-			int mot_mp_pos_;  // 记录 motion 的 mp 的位置idx（因为 pSize 与 dim 不同）
+			int mot_dim_pos_; // Record the dim pos of motion, if -1, it's not a motion
+			int mot_mp_pos_;  // Record the idx of the mp of motion (since pSize is different from dim)
 			double* mp_;
 		};
 
-		// 用于记录Relation的 I J 杆件的指针
-		const Part *prtI_, *prtJ_; // prtI为对角块的part
+		// Pointers to the two parts of the relation
+		const Part *prtI_, *prtJ_; // prtI is the part for the diagonal block
 		
-		// dim_ 变量表示子系统的Constraints中有最大dim的数值，
-		//      老师在初始化时会进行排序，最大的在第一个
-		// size_ 变量表示子系统的两端有坐标系情况下的约束的 dim()的和
+		// dim_ variable represents the max dim among the constraints of the subsystem.
+		//      It's sorted during initialization, putting the maximum one first.
+		// size_ variable represents the sum of dim() of all constraints on both sides.
 		Size dim_, size_;
 		
 		Block* blk_data_;
 		Size blk_size_;
 	};
-	struct LocalRelation :public Relation { std::vector<Block> cst_pool_; }; //仅仅为了实现
-	// 关于 Diag 和 Reminder，可以看Imp里面的注释的 Step4，将求解的 yp 与变换后的 C 分成两部分
+	struct LocalRelation :public Relation { std::vector<Block> cst_pool_; }; // Just for implementation
+	// For Diag and Remainder, see Step4 in the Imp comments, which divides the solved yp and transformed C into two parts
 	struct Diag{
 		// D * C * P =[I  C]
 		//            [0  0]
-		// 对于存在多个约束的relation来说，P有意义
+		// P makes sense for relations with multiple constraints
 		Size *p_;
 		double dm_[36], iv_[10];
 		double pm1_[16], pm2_[16], *pm_, *last_pm_;
 		double xp_[6], bp_[6], *bc_, *xc_;
-		double *cmI_, *cmJ_, *cmU_, *cmT_; // 因为可能有多个约束，总约束的个数可能超过6，cm维数也不确定
+		double *cmI_, *cmJ_, *cmU_, *cmT_; // Since there could be multiple constraints, the total number of constraints might exceed 6, and the dimension of cm is unknown
 
 		Size rows_; // number of row in F
 		const Part *part_;
@@ -88,7 +88,7 @@ namespace aris::dynamic{
 		typedef void(*UpdFunc2)(Diag*, bool cpt_cp);
 		UpdFunc2 upd_d_and_cp_;
 	};
-	// 关于 Diag 和 Reminder，可以看Imp里面的注释的 Step4，将求解的 yp 与变换后的 C 分成两部分
+	// For Diag and Remainder, see Step4 in the Imp comments, which divides the solved yp and transformed C into two parts
 	struct Remainder{
 		struct Block { Diag* diag_; bool is_I_; };
 		Diag *i_diag_, *j_diag_;
@@ -117,24 +117,24 @@ namespace aris::dynamic{
 		Size iter_count_, max_iter_count_;
 
 		auto hasGround()const noexcept->bool { return has_ground_; }
-		// 从模型中跟新数据 //
+		// Update data from the model //
 		auto updDmCm(bool cpt_cp)noexcept->void;
 		auto updDiagIv()noexcept->void;
-		// 更新 Cv 的数据，与kinVel()方法相关
+		// Update Cv data, related to kinVel()
 		auto updCv()noexcept->void;
-		// 更新 Ca 也就是 bc
+		// Update Ca, which is bc
 		auto updCa()noexcept->void;
-		// 求解部分 //
+		// Solving section //
 		auto updF()noexcept->void;
-		// 求解 C' * xp = bc 也就是 A x = b
+		// Solve C' * xp = bc, which is A x = b
 		auto sovXp()noexcept->void;
-		// 更新 Step6 部分中的 G 矩阵
+		// Update the G matrix described in Step6
 		auto updG()noexcept->void;
-		// 应该只有动力学求解使用
+		// Should only be used by dynamics solver
 		auto sovXc()noexcept->void;
 		auto sovProjectMassMatrix()noexcept->void;
 		auto sovXcRemain()noexcept->void;
-		// 接口 //
+		// Interface //
 		auto kinPos()noexcept->void;
 		auto kinVel()noexcept->void;
 		auto dynAccAndFce()noexcept->void;
@@ -142,14 +142,14 @@ namespace aris::dynamic{
 		std::vector<double>& target_xp)noexcept->void;
 	};
 	struct PublicData{
-		// 激活的驱动 //
+		// Active motions //
 		aris::dynamic::MotionBase** active_mots_;
 		double* active_mp_;
 		int active_mot_size_,
 			active_mp_size_,
 			active_mot_dim_;
 
-		// 非激活的驱动 //
+		// Inactive motions //
 		aris::dynamic::MotionBase** deactive_mots_;
 		double* deactive_mp_;
 		int deactive_mot_size_,
@@ -163,15 +163,15 @@ namespace aris::dynamic{
 		Size subsys_size_;
 		Diag** get_diag_from_part_id_;
 
-		// 雅可比矩阵 // 
+		// Jacobian matrix // 
 		double* Jg_, * cg_;
 		Size mJg_, nJg_;
 
-		// 动力学矩阵 // 
+		// Dynamic matrix // 
 		double* M_, * h_;
 		Size nM_;
 
-		// 计算内存 //
+		// Computing memory //
 		double *F_, *FU_, *FT_, *G_, *GU_, *GT_, *S_, *QT_DOT_G_, *xpf_, *xcf_, *bpf_, *bcf_, *beta_, *cmI_, *cmJ_, *cmU_, *cmT_;
 		Size *FP_, *GP_;
 		
@@ -185,7 +185,7 @@ namespace aris::dynamic{
 			d->upd_d_and_cp_(d, cpt_cp);// cp //
 			d->rows_ = fm_;
 			fm_ += 6 - d->rel_.dim_;
-			// 根据 bc_ 中存储的位置的 error 得到最大的 error。
+			// Get the max error from the errors stored in bc_.
 			if (cpt_cp)for (Size i{ 0 }; i < d->rel_.size_; ++i) error_ = std::max(error_, std::abs(d->bc_[i]));// error //
 		}
 
@@ -197,7 +197,7 @@ namespace aris::dynamic{
 				s_pm_dot_pm(b->is_I_ ? r->i_diag_->pm_ : r->j_diag_->pm_, *b->cst_->makI()->prtPm(), pmI);
 				s_pm_dot_pm(b->is_I_ ? r->j_diag_->pm_ : r->i_diag_->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 
-				// 计算constraint的 cp 代表的位置偏差并储存在 bc_ 中，只在 kinPos() 使用
+				// Calculate the positional error represented by cp of the constraint, store it in bc_. Only used in kinPos()
 				if (cpt_cp) {
 					if(auto j = dynamic_cast<const aris::dynamic::Joint*>(b->cst_))
 						j->cptCpFromPm(r->bc_ + pos, pmI, pmJ);// cp //
@@ -267,44 +267,44 @@ namespace aris::dynamic{
 		s_householder_utp(fm_, fn_, pd_->F_, ColMajor(fm_), pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->FP_, fr_, max_error_);
 	}
 	auto SubSystem::sovXp()noexcept->void{
-		// 请参考step 4，这里先把xp做个预更新,以及初始化 //
+		// Please refer to step 4, pre-update and initialize xp here //
 		std::fill_n(d_data_[0].xp_, 6, 0.0);
 		ARIS_LOOP_D_2_TO_END{
-			// 如果是多个杆件，那么需要重新排序 //
+			// If there are multiple parts, resorting is needed //
 			s_permutate(d->rel_.size_, 1, d->p_, d->bc_);
 
-			// 预更新 //
+			// pre-update //
 			s_mm(6, 1, d->rel_.dim_, d->dm_, T(6), d->bc_, 1, d->xp_, 1);
 		}
 
-		// 构造bcf，存在公式 F' * ypf = bcf 在 Step5 //
+		// Construct bcf, the formula F' * ypf = bcf exists in Step5 //
 		Size cols{ 0 };
 		ARIS_LOOP_R{
 			s_vc(r->rel_.size_, r->bc_, pd_->bcf_ + cols);
 			ARIS_LOOP_BLOCK(r->){
-				auto cm = b->is_I_ ? r->cmJ_ : r->cmI_;//这里是颠倒的，因为加到右侧需要乘-1.0
-				s_mma(r->rel_.size_, 1, 6, cm, ColMajor{ r->rel_.size_ }, b->diag_->xp_, 1, pd_->bcf_ + cols, 1);//请参考step 4，将预更新的东西取出
+				auto cm = b->is_I_ ? r->cmJ_ : r->cmI_;// It is inverted here, because adding to the right needs to multiply by -1.0
+				s_mma(r->rel_.size_, 1, 6, cm, ColMajor{ r->rel_.size_ }, b->diag_->xp_, 1, pd_->bcf_ + cols, 1);// Please refer to step 4, extract the pre-updated elements
 			}
 			cols += r->rel_.size_;
 		}
 
-		// 求解 F' * xpf = bcf //
+		// Solve F' * xpf = bcf //
 		s_vc(fn_, pd_->bcf_, pd_->xpf_);
 		s_permutate(fn_, 1, pd_->FP_, pd_->xpf_);
 		s_sov_lm(fr_, 1, pd_->FU_, T(ColMajor(fm_)), pd_->xpf_, 1, pd_->xpf_, 1, max_error_);
 		s_householder_ut_q_dot(fm_, fn_, 1, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->xpf_, 1, pd_->xpf_, 1);
 
-		// 更新xp //  相当于 D' * yp
+		// Update xp //  Equivalent to D' * yp
 		ARIS_LOOP_D_2_TO_END s_mma(6, 1, 6 - d->rel_.dim_, d->dm_ + at(0, d->rel_.dim_, T(6)), T(6), pd_->xpf_ + d->rows_, 1, d->xp_, 1);
 
-		// 做行变换 //  相当于 P' * (D' * yp)
+		// Perform row transformation //  Equivalent to P' * (D' * yp)
 		ARIS_LOOP_D_2_TO_END s_va(6, d->rd_->xp_, d->xp_);
 	}
 	auto SubSystem::updG()noexcept->void{
 		gm_ = hasGround() ? fm_ : fm_ + 6;
 		gn_ = hasGround() ? fm_ - fr_ : fm_ - fr_ + 6;
 
-		//////////////////////////////////////////// 求CT * xp = bc 的通解S step 5 //////////////////////////////
+		//////////////////////////////////////////// Solve S for CT * xp = bc step 5 //////////////////////////////
 		std::fill_n(pd_->xpf_, fm_, 0.0);
 		for (Size j(-1); ++j < fm_ - fr_;){
 			pd_->xpf_[fr_ + j] = 1.0;
@@ -312,142 +312,142 @@ namespace aris::dynamic{
 			pd_->xpf_[fr_ + j] = 0.0;
 		}
 
-		//////////////////////////////////////////// 求G，参考 step 6 //////////////////////////////
+		//////////////////////////////////////////// Solve G, reference step 6 //////////////////////////////
 		s_fill(gm_, gn_, 0.0, pd_->G_);
-		// 先求S产生的G
+		// First solve the G generated by S
 		for (Size j(-1); ++j < fm_ - fr_;){
-			// 初始化xp并乘以DT
+			// Initialize xp and multiply by DT
 			std::fill(d_data_[0].xp_, d_data_[0].xp_ + 6, 0.0);
 			ARIS_LOOP_D_2_TO_END{
 				if (d->rel_.dim_ == 6)std::fill(d->xp_, d->xp_ + 6, 0.0);
 				else s_mm(6, 1, 6 - d->rel_.dim_, d->dm_ + at(0, d->rel_.dim_, ColMajor{ 6 }), ColMajor{ 6 }, pd_->S_ + at(d->rows_, j, fm_ - fr_), fm_ - fr_, d->xp_, 1);
 			}
 
-			// 乘以PT，行加
+			// Multiply by PT, add rows
 			ARIS_LOOP_D_2_TO_END s_va(6, d->rd_->xp_, d->xp_);
 
-			// 乘以I
+			// Multiply by I
 			ARIS_LOOP_D_2_TO_END{
 				double tem[6];
 				s_iv_dot_as(d->iv_, d->xp_, tem);
 				s_vc(6, tem, d->xp_);
 			}
 
-			// 乘以P，行加
+			// Multiply by P, add rows
 			ARIS_LOOP_DIAG_INVERSE_2_TO_END s_va(6, d->xp_, d->rd_->xp_);
 
-			// 乘以D，并取出来
+			// Multiply by D, and extract
 			ARIS_LOOP_DIAG_INVERSE_2_TO_END s_mm(6 - d->rel_.dim_, 1, 6, d->dm_ + at(d->rel_.dim_, 0, 6), 6, d->xp_, 1, pd_->G_ + at(d->rows_, j, gn_), gn_);
 
-			// 如果无地，需要考虑G中第一个杆件处的xp
+			// If no ground, need to consider xp of the first part in G
 			if (!hasGround())s_vc(6, d_data_->xp_, 1, pd_->G_ + at(fm_, j, fm_ - fr_ + 6), fm_ - fr_ + 6);
 		}
-		// 再求无地处第一个杆件处产生的G
+		// Second, solve the G generated by the first part without ground
 		if (!hasGround()){
 			for (Size j(-1); ++j < 6;){
-				// 初始化，此时无需乘以DT,因为第一个杆件的DT为单位阵，其他地方的xp为0
+				// Initialize, here no need to multiply by DT, as first part's DT is identity matrix, and other xp are 0
 				ARIS_LOOP_D std::fill(d->xp_, d->xp_ + 6, 0.0);
 				d_data_[0].xp_[j] = 1.0;
 
-				// 乘以PT
+				// Multiply by PT
 				ARIS_LOOP_D_2_TO_END s_va(6, d->rd_->xp_, d->xp_);
 
-				// 乘以I, 因为bp里面储存了外力，因此不能用bp
+				// Multiply by I, because bp stores external forces, bp cannot be used
 				ARIS_LOOP_D	{
 					double tem[6];
 					s_iv_dot_as(d->iv_, d->xp_, tem);
 					s_vc(6, tem, d->xp_);
 				}
 
-				// 乘以P, 类似rowAddBp();
+				// Multiply by P, similar to rowAddBp();
 				ARIS_LOOP_DIAG_INVERSE_2_TO_END s_va(6, d->xp_, d->rd_->xp_);
 
-				// 乘以D，并取出来
+				// Multiply by D, and extract
 				ARIS_LOOP_DIAG_INVERSE_2_TO_END s_mm(6 - d->rel_.dim_, 1, 6, d->dm_ + at(d->rel_.dim_, 0, 6), 6, d->xp_, 1, pd_->G_ + at(d->rows_, fm_ - fr_ + j, gn_), gn_);
 				s_vc(6, d_data_[0].xp_, 1, pd_->G_ + at(fm_, fm_ - fr_ + j, gn_), gn_);
 			}
 		}
 	}
 	auto SubSystem::sovXc()noexcept->void{
-		/////////////////////////////////// 求解beta /////////////////////////////////////////////////////////////
-		//// 更新每个杆件的力 pf ////
+		/////////////////////////////////// Solve beta /////////////////////////////////////////////////////////////
+		//// Update the force pf of each part ////
 		ARIS_LOOP_D	{
-			// 外力（不包括惯性力）已经储存在了bp中，但为了后续可能存在的修正，这里将其与惯性力之和暂存到 last_pm_ 中 //
+			// External force (excluding inertial force) is already stored in bp, but for possible later corrections, it and the inertial force are temporarily stored in last_pm_ //
 			
 			// v x I * v //
 			double I_dot_v[6];
 			s_iv_dot_as(d->iv_, d->part_->vs(), I_dot_v);
 			s_cfa(d->part_->vs(), I_dot_v, d->bp_);
-			s_vc(6, d->bp_, d->last_pm_); // 暂存处理
+			s_vc(6, d->bp_, d->last_pm_); // Temporary storage processing
 
 			// I*(a-g) //
 			double as_minus_g[6], iv_dot_as[6];
-			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vc(6, d->xp_, as_minus_g);// xp stores acceleration
 			s_vs(6, pd_->gravity_, as_minus_g);
 			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
 			s_va(6, iv_dot_as, d->bp_);
 		}
 
-		//// P*bp  对bp做行加变换，并取出bcf ////
+		//// P*bp  Apply row addition transformation to bp and extract bcf ////
 		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
-			// 行变换
+			// Row transformation
 			s_va(6, d->bp_, d->rd_->bp_);
 
-			// 取出bcf
+			// Extract bcf
 			double tem[6];
 			s_mm(6, 1, 6, d->dm_, 6, d->bp_, 1, tem, 1);
 			s_vc(6, tem, d->bp_);
 			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
 		}
 
-		//// 根据G求解S解空间的beta, 先把beta都弄成它的右侧未知量 ////
-		if (!hasGround())s_vc(6, d_data_[0].bp_, pd_->beta_ + fm_);//这一项实际是把无地面的xp拷贝到beta中
+		//// Solve beta in S solution space according to G, first make all beta as right side unknown variables ////
+		if (!hasGround())s_vc(6, d_data_[0].bp_, pd_->beta_ + fm_);//This item actually copies xp without ground into beta
 		s_householder_ut_qt_dot(fm_, fr_, 1, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->bpf_, 1, pd_->beta_, 1);
 
-		//// 求QT_DOT_G ////
-		// G 和 QT_DOT_G位于同一片内存，因此不需要以下第一句
-		// if (!hasGround())s_mc(gm - fm_, gn_, G + at(fm_, 0, gn_), QT_DOT_G + at(fm_, 0, gn_)); // 这一项实际是把无地面产生的G拷贝到QT_DOT_G中
+		//// Calculate QT_DOT_G ////
+		// G and QT_DOT_G are in the same memory, so the following first sentence is not needed
+		// if (!hasGround())s_mc(gm - fm_, gn_, G + at(fm_, 0, gn_), QT_DOT_G + at(fm_, 0, gn_)); // This item actually copies the G generated without ground into QT_DOT_G
 		s_householder_ut_qt_dot(fm_, fr_, gn_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->G_, gn_, pd_->QT_DOT_G_, gn_);
 
 		///////////////////////////////
-		// 求解之前通解的解的系数 beta
-		// 可以通过rank == m-r来判断质点等是否影响计算
+		// Solve the coefficient beta of the previous general solution
+		// It is possible to judge whether the particle etc. affect the calculation by rank == m-r
 		///////////////////////////////
 		Size rank;
 		s_householder_utp(gn_, gn_, pd_->QT_DOT_G_ + at(fr_, 0, gn_), pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, rank, max_error_);
 		s_householder_utp_sov(gn_, gn_, 1, rank, pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, pd_->beta_ + fr_, pd_->beta_);
 
-		/////////////////////////////////// 求解xp /////////////////////////////////////////////////////////////
-		//// 重新求解 xp ，这次考虑惯量 ////
-		// 根据特解更新 xpf 以及无地面处的特解（杆件1速度之前可以随便设）
+		/////////////////////////////////// Solve xp /////////////////////////////////////////////////////////////
+		//// Recalculate xp, considering inertia this time ////
+		// Update xpf according to the particular solution and the particular solution without ground (velocity of part 1 can be set arbitrarily before)
 		s_mms(fm_, 1, fm_ - fr_, pd_->S_, pd_->beta_, pd_->xpf_);
 		if (!hasGround())s_vi(6, pd_->beta_ + fm_ - fr_, d_data_[0].xp_);
-		// 将xpf更新到xp，先乘以D' 再乘以 P'
+		// Update xpf to xp, multiply by D\' then multiply by P\'
 		ARIS_LOOP_D_2_TO_END {
-			// 结合bc 并乘以D'
+			// Combine with bc and multiply by D\'
 			s_mm(6, 1, d->rel_.dim_, d->dm_, ColMajor{ 6 }, d->bc_, 1, d->xp_, 1);
 			s_mma(6, 1, 6 - d->rel_.dim_, d->dm_ + at(0, d->rel_.dim_, T(6)), T(6), pd_->xpf_ + d->rows_, 1, d->xp_, 1);
 
-			// 乘以P'
+			// Multiply by P\'
 			s_va(6, d->rd_->xp_, d->xp_);
 		}
 
-		/////////////////////////////////// 求解xc /////////////////////////////////////////////////////////////
-		// 因为上文中 xp 可能不是真实解，这里重新做循环计算
-		//// 更新每个杆件的力 pf ////
+		/////////////////////////////////// Solve xc /////////////////////////////////////////////////////////////
+		// Since xp above may not be the true solution, recalculate cyclically here
+		//// Update the force pf of each part ////
 		ARIS_LOOP_D {
-			// 取出之前暂存的外力 //
+			// Extract previously temporarily stored external force //
 			s_vc(6, d->last_pm_, d->bp_);
 
 			// I*(a-g) //
 			double as_minus_g[6], iv_dot_as[6];
-			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vc(6, d->xp_, as_minus_g);// xp stores acceleration
 			s_vs(6, pd_->gravity_, as_minus_g);
 			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
 			s_va(6, iv_dot_as, d->bp_);
 		}
 
-		//// P*bp  对bp做行加变换 ////
+		//// P*bp  Apply row addition transformation to bp ////
 		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
 			s_va(6, d->bp_, d->rd_->bp_);
 			
@@ -457,15 +457,15 @@ namespace aris::dynamic{
 			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
 		}
 		
-		// 求解xcf //
+		// Solve xcf //
 		s_householder_utp_sov(fm_, fn_, 1, fr_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->FP_, pd_->bpf_, 1, pd_->xcf_, 1, max_error_);
 
-		// 将已经求出的x更新到remainder中，此后将已知数移到右侧
+		// Update the calculated x to remainder, then move the known variable to the right side
 		Size cols{ 0 };
 		ARIS_LOOP_R {
 			s_vc(r->rel_.size_, pd_->xcf_ + cols, r->xc_);
 
-			// 更新待求
+			// Update to be solved
 			ARIS_LOOP_BLOCK(r->){
 				double tem[6];
 				s_mm(6, 1, r->rel_.size_, b->is_I_ ? r->cmJ_ : r->cmI_, pd_->xcf_ + cols, tem);
@@ -481,86 +481,86 @@ namespace aris::dynamic{
 		}
 	}
 	auto SubSystem::sovProjectMassMatrix()noexcept->void{
-		/////////////////////////////////// 求解beta /////////////////////////////////////////////////////////////
-		//// 更新每个杆件的力 pf ////
+		/////////////////////////////////// Solve beta /////////////////////////////////////////////////////////////
+		//// Update the force pf of each part ////
 		ARIS_LOOP_D	{
-			// 外力（不包括惯性力）已经储存在了bp中，但为了后续可能存在的修正，这里将其与惯性力之和暂存到 last_pm_ 中 //
+			// External force (excluding inertial force) is already stored in bp, but for possible later corrections, it and the inertial force are temporarily stored in last_pm_ //
 			
 			// v x I * v //
 			double I_dot_v[6];
 			s_iv_dot_as(d->iv_, d->part_->vs(), I_dot_v);
 			s_cfa(d->part_->vs(), I_dot_v, d->bp_);
-			s_vc(6, d->bp_, d->last_pm_); // 暂存处理
+			s_vc(6, d->bp_, d->last_pm_); // Temporary storage processing
 
 			// I*(a-g) //
 			double as_minus_g[6], iv_dot_as[6];
-			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vc(6, d->xp_, as_minus_g);// xp stores acceleration
 			s_vs(6, pd_->gravity_, as_minus_g);
 			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
 			s_va(6, iv_dot_as, d->bp_);
 		}
 
-		//// P*bp  对bp做行加变换，并取出bcf ////
+		//// P*bp  Apply row addition transformation to bp and extract bcf ////
 		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
-			// 行变换
+			// Row transformation
 			s_va(6, d->bp_, d->rd_->bp_);
 
-			// 取出bcf
+			// Extract bcf
 			double tem[6];
 			s_mm(6, 1, 6, d->dm_, 6, d->bp_, 1, tem, 1);
 			s_vc(6, tem, d->bp_);
 			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
 		}
 
-		//// 根据G求解S解空间的beta, 先把beta都弄成它的右侧未知量 ////
-		if (!hasGround())s_vc(6, d_data_[0].bp_, pd_->beta_ + fm_);//这一项实际是把无地面的xp拷贝到beta中
+		//// Solve beta in S solution space according to G, first make all beta as right side unknown variables ////
+		if (!hasGround())s_vc(6, d_data_[0].bp_, pd_->beta_ + fm_);//This item actually copies xp without ground into beta
 		s_householder_ut_qt_dot(fm_, fr_, 1, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->bpf_, 1, pd_->beta_, 1);
 
-		//// 求QT_DOT_G ////
-		// G 和 QT_DOT_G位于同一片内存，因此不需要以下第一句
-		// if (!hasGround())s_mc(gm - fm_, gn_, G + at(fm_, 0, gn_), QT_DOT_G + at(fm_, 0, gn_)); // 这一项实际是把无地面产生的G拷贝到QT_DOT_G中
+		//// Calculate QT_DOT_G ////
+		// G and QT_DOT_G are in the same memory, so the following first sentence is not needed
+		// if (!hasGround())s_mc(gm - fm_, gn_, G + at(fm_, 0, gn_), QT_DOT_G + at(fm_, 0, gn_)); // This item actually copies the G generated without ground into QT_DOT_G
 		s_householder_ut_qt_dot(fm_, fr_, gn_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->G_, gn_, pd_->QT_DOT_G_, gn_);
 	}
 	auto SubSystem::sovXcRemain()noexcept->void{
 		///////////////////////////////
-		// 求解之前通解的解的系数 beta
-		// 可以通过rank == m-r来判断质点等是否影响计算
+		// Solve the coefficient beta of the previous general solution
+		// It is possible to judge whether the particle etc. affect the calculation by rank == m-r
 		///////////////////////////////
 		Size rank;
 		s_householder_utp(gn_, gn_, pd_->QT_DOT_G_ + at(fr_, 0, gn_), pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, rank, max_error_);
 		s_householder_utp_sov(gn_, gn_, 1, rank, pd_->GU_ + at(fr_, 0, gn_), pd_->GT_, pd_->GP_, pd_->beta_ + fr_, pd_->beta_);
 
-		/////////////////////////////////// 求解xp /////////////////////////////////////////////////////////////
-		//// 重新求解 xp ，这次考虑惯量 ////
-		// 根据特解更新 xpf 以及无地面处的特解（杆件1速度之前可以随便设）
+		/////////////////////////////////// Solve xp /////////////////////////////////////////////////////////////
+		//// Recalculate xp, considering inertia this time ////
+		// Update xpf according to the particular solution and the particular solution without ground (velocity of part 1 can be set arbitrarily before)
 		s_mms(fm_, 1, fm_ - fr_, pd_->S_, pd_->beta_, pd_->xpf_);
 		if (!hasGround())s_vi(6, pd_->beta_ + fm_ - fr_, d_data_[0].xp_);
-		// 将xpf更新到xp，先乘以D' 再乘以 P'
+		// Update xpf to xp, multiply by D\' then multiply by P\'
 		ARIS_LOOP_D_2_TO_END {
-			// 结合bc 并乘以D'
+			// Combine with bc and multiply by D\'
 			s_mm(6, 1, d->rel_.dim_, d->dm_, ColMajor{ 6 }, d->bc_, 1, d->xp_, 1);
 			s_mma(6, 1, 6 - d->rel_.dim_, d->dm_ + at(0, d->rel_.dim_, T(6)), T(6), pd_->xpf_ + d->rows_, 1, d->xp_, 1);
 
-			// 乘以P'
+			// Multiply by P\'
 			s_va(6, d->rd_->xp_, d->xp_);
 		}
 
-		/////////////////////////////////// 求解xc /////////////////////////////////////////////////////////////
-		// 因为上文中 xp 可能不是真实解，这里重新做循环计算
-		//// 更新每个杆件的力 pf ////
+		/////////////////////////////////// Solve xc /////////////////////////////////////////////////////////////
+		// Since xp above may not be the true solution, recalculate cyclically here
+		//// Update the force pf of each part ////
 		ARIS_LOOP_D {
-			// 取出之前暂存的外力 //
+			// Extract previously temporarily stored external force //
 			s_vc(6, d->last_pm_, d->bp_);
 
 			// I*(a-g) //
 			double as_minus_g[6], iv_dot_as[6];
-			s_vc(6, d->xp_, as_minus_g);// xp储存加速度
+			s_vc(6, d->xp_, as_minus_g);// xp stores acceleration
 			s_vs(6, pd_->gravity_, as_minus_g);
 			s_iv_dot_as(d->iv_, as_minus_g, iv_dot_as);
 			s_va(6, iv_dot_as, d->bp_);
 		}
 
-		//// P*bp  对bp做行加变换 ////
+		//// P*bp  Apply row addition transformation to bp ////
 		ARIS_LOOP_DIAG_INVERSE_2_TO_END {
 			s_va(6, d->bp_, d->rd_->bp_);
 			
@@ -570,15 +570,15 @@ namespace aris::dynamic{
 			s_vc(6 - d->rel_.dim_, d->bp_ + d->rel_.dim_, pd_->bpf_ + d->rows_);
 		}
 		
-		// 求解xcf //
+		// Solve xcf //
 		s_householder_utp_sov(fm_, fn_, 1, fr_, pd_->FU_, ColMajor(fm_), pd_->FT_, 1, pd_->FP_, pd_->bpf_, 1, pd_->xcf_, 1, max_error_);
 
-		// 将已经求出的x更新到remainder中，此后将已知数移到右侧
+		// Update the calculated x to remainder, then move the known variable to the right side
 		Size cols{ 0 };
 		ARIS_LOOP_R {
 			s_vc(r->rel_.size_, pd_->xcf_ + cols, r->xc_);
 
-			// 更新待求
+			// Update to be solved
 			ARIS_LOOP_BLOCK(r->){
 				double tem[6];
 				s_mm(6, 1, r->rel_.size_, b->is_I_ ? r->cmJ_ : r->cmI_, pd_->xcf_ + cols, tem);
@@ -598,75 +598,75 @@ namespace aris::dynamic{
 		std::vector<double>& target_xp) noexcept -> void {
     const bool grounded = hasGround();
     const int n_beta = grounded ? (fm_ - fr_) : (fm_ + 6 - fr_);
-    const int n_body6 = 6 * d_size_;   // 行数 = 刚体数 * 6
+    const int n_body6 = 6 * d_size_;   // Rows = number of bodies * 6
 
-    // 保存当前速度状态（以便恢复）
+    // Save current velocity state (for recovery)
     std::vector<double> save_xp(n_body6, 0.0);
     for (int b = 0; b < d_size_; ++b)
       s_vc(6, d_data_[b].xp_, save_xp.data() + 6 * b);
 
-    // 将所有刚体速度清零，并清空运动副速度误差（bc）
+    // Clear all body velocities and constraint velocity errors (bc)
     // ARIS_LOOP_R std::fill_n(r->bc_, r->rel_.size_, 0.0);
 
-    // 临时数组：xpf 长度 fm_
+    // Temporary array: length of xpf fm_
     std::vector<double> xpf(fm_, 0.0);
 
-    // 逐列扰动 β
+    // Column-by-column perturbation β
     for (int j = 0; j < n_beta; ++j) {
-      // 每列开始前，清零所有刚体速度（基线为零）
+      // Before each column starts, clear all body velocities (baseline is zero)
     	ARIS_LOOP_D std::fill_n(d->xp_, 6, 0.0);
 
       if (j < fm_ - fr_) {
-        // 内部运动自由度（通过 S 矩阵作用）
-        // 构造 β 扰动向量 = e_j (长度 fm_ - fr_)
+        // Internal motion DoF (via matrix S)
+        // Construct perturbation vector of beta = e_j (length fm_ - fr_)
         std::vector<double> beta_pert(fm_ - fr_, 0.0);
         beta_pert[j] = 1.0;
 
         // xpf = S * beta_pert
-        // 注：pd_->S_ 列优先存储，维度 fm_ × (fm_-fr_)
+        // Note: pd_->S_ is stored in column-major order, dimension fm_ × (fm_-fr_)
         s_mms(fm_, 1, fm_ - fr_, pd_->S_, beta_pert.data(), xpf.data());
 
-        // 将 xpf 转换为各刚体速度（基数杆件保持 0）
+        // Convert xpf to velocities of parts (base part keeps 0)
 				ARIS_LOOP_D_2_TO_END{
           // D' * xpf_sub
           s_mma(6, 1, 6 - d->rel_.dim_,
                 d->dm_ + at(0, d->rel_.dim_, T(6)), T(6),
                 xpf.data() + d->rows_, 1,
                 d->xp_, 1);
-          // P' 行变换（正向传播）
+          // P' Row transformation (forward propagation)
           s_va(6, d->rd_->xp_, d->xp_);
         }
       } else {
-        // 无地面时的基座运动自由度（6 维）
+        // Base motion DoF (6-dimensional) when there is no ground
         int base_idx = j - (fm_ - fr_);   // 0..5
 
-        // 直接设置基座刚体速度为单位向量 e_{base_idx}
+        // Directly set the base body velocity to the unit vector e_{base_idx}
         d_data_[0].xp_[base_idx] = 1.0;
 
-        // 正向运动学传播基座速度到所有从属刚体
+        // Forward kinematics propagates base velocity to all dependent bodies
 				ARIS_LOOP_D_2_TO_END{
-          // rd_->xp_ 封装了从父到子的速度变换
+          // rd_->xp_ wraps the velocity transformation from parent to child
           s_va(6, d->rd_->xp_, d->xp_);
         }
       }
 
-      // 提取目标刚体速度
+      // Extract target body velocity
       for (Size t = 0; t < targetBodies.size(); ++t) {
         int b = targetBodies[t];
         std::copy_n(d_data_[b].xp_, 6, target_xp.data() + 6*t);
       }
     }
 
-    // 恢复速度状态
+    // Restore velocity state
     for (int b = 0; b < d_size_; ++b)
       s_vc(6, save_xp.data() + 6 * b, d_data_[b].xp_);
 	}
-	// 老师的正解认为，一个机器人的正解，那些限制住的自由度不会被修改，所以当两个不同
-	// 位置的FixedJoint加入的时候，因为没有自由度可以调整，所以杆件位置不会调整
-	// 如果有需要在没有自由度情况下依旧要根据最小二乘调整的需求，那么就不能使用这个方法
-	// 就看新加入的约束的可信度，如果认为和机器人的连接具有相同的可信度，那么就需要一个
-	// 全局的最小二乘，但是因为我们的接触约束不是真正的刚性约束，所以只需要一个在关节
-	// 空间上的最小二乘解即可，而不是真正的融合了接触位置的最小二乘解。
+	// The exact solution thinks that for a robot\'s exact solution, those restricted DoFs will not be modified, so when two different
+	// FixedJoints of locations are added, because there is no DoF to adjust, the position of parts will not be adjusted
+	// If there is a requirement to still adjust according to least squares even when there are no DoFs, then this method cannot be used
+	// It depends on the credibility of the newly added constraint, if it is considered to have the same credibility as the robot connection, then a
+	// global least squares is required, but because our contact constraints are not true rigid constraints, it is only necessary to have a
+	// least squares solution in joint space, rather than a least squares solution that truly integrates the contact position.
 	auto SubSystem::kinPos()noexcept->void{
 		updDmCm(true);
 		for (iter_count_ = 0; iter_count_ < max_iter_count_; ++iter_count_){
@@ -676,24 +676,24 @@ namespace aris::dynamic{
 			updF();
 			sovXp();
 
-			// 将xp更新成pm
+			// Update xp to pm
 			ARIS_LOOP_D {
 				std::swap(d->pm_, d->last_pm_);
 				double tem[16];
 				s_ps2pm(d->xp_, tem);
-				// last_pm_ * xp_ -> pm_ 解出来的是位置的变化量（最小二乘）
+				// last_pm_ * xp_ -> pm_ solves the positional variation (least squares)
 				s_pm2pm(tem, d->last_pm_, d->pm_);
 			}
 
 			double last_error = error_;
 			updDmCm(true);
 
-			// 对于非串联臂，当迭代误差反而再增大时，会主动缩小步长
+			// For non-serial arms, when the iteration error increases instead, the step size will be actively reduced
 			// d_size_ = prt_vec.size()
-			// 只有不是串联臂才会用以下迭代，sys.r_size_ = r_vec.size();
-			// 只有不是串联机械臂才会有非零 r_size_ = rel_vec.size() - prt_vec.size() + 1
+			// Only non-serial arms will use the following iteration, sys.r_size_ = r_vec.size();
+			// Only non-serial manipulator will have non-zero r_size_ = rel_vec.size() - prt_vec.size() + 1
 			if (r_size_){
-				// 这里如果用while可以确保每个循环误差都会减小，但是有可能出现卡死
+				// If while is used here, it can ensure that the error of each loop will decrease, but it may cause an infinite loop
 				if (error_ > last_error) {
 				
 					double coe = last_error / (error_ + last_error);
@@ -731,7 +731,7 @@ namespace aris::dynamic{
 		updF();
 		updG();
 
-		// 求解 xp 的某个特解（不考虑惯量），求出beta 以及 xc //
+		// Solve a certain particular solution of xp (ignoring inertia), solve beta and xc //
 		sovXp();
 		sovXc();
 	}
@@ -743,14 +743,14 @@ namespace aris::dynamic{
 #define ARIS_LOOP_SYS_D for (auto d = sys->d_data_; d < sys->d_data_ + sys->d_size_; ++d)
 #define ARIS_LOOP_SYS_R for (auto r = sys->r_data_; r < sys->r_data_ + sys->r_size_; ++r)
 	struct UniversalSolver::Imp{
-		// 动力学计算以下变量的关系
-		// I  ： 惯量矩阵,m x m
-		// C  ： 约束矩阵,m x n
-		// pa ： 杆件的螺旋加速度 m x 1
-		// pf ： 杆件的螺旋外力（不包括惯性力）m x 1
-		// ca ： 约束的加速度（不是螺旋）n x 1
-		// cf ： 约束力n x 1
-		// 动力学主要求解以下方程：
+		// Dynamics calculates the relationships of the following variables
+		// I: Inertia matrix, m x m
+		// C: Constraint matrix, m x n
+		// pa: Spatial acceleration of parts m x 1
+		// pf: Spatial external force of parts (excluding inertial force) m x 1
+		// ca: Acceleration of constraints (not spatial) n x 1
+		// cf: Constraint force n x 1
+		// Dynamics mainly solves the following equations:
 		// [ -I  C  ]  *  [ pa ]  = [ pf ]
 		// [  C' O  ]     [ cf ]    [ ca ]
 		//
@@ -764,42 +764,42 @@ namespace aris::dynamic{
 		//     [ ca ]   [ bc ]
 		// 
 		// 
-		// 计算方法：
+		// Calculation method:
 		// --------------------------------------------------------------------
-		// step 1:分出子系统，调整杆件和约束顺序，使得约束矩阵变成上三角块矩阵
-		//        经过这一步，约束矩阵变为：
+		// step 1: Separate subsystems, adjust the order of parts and constraints so that the constraint matrix becomes an upper triangular block matrix
+		//        After this step, the constraint matrix becomes:
 		//
-		//        有地面(n个约束，m个杆件)：
+		//        With ground (n constraints, m parts):
 		//        [ Cg  -C1  ...              ... -Cn ]
 		//        |      C1  ...  -Cm-1       ...     |
 		//        |          ...         -Cm  ...     |
 		//        [                Cm-1   Cm  ...  Cn ]                
 		//    
-		//        无地面(n个约束，m个杆件)
+		//        Without ground (n constraints, m parts):
 		//        [ -C1  ...             -Cn ]
 		//        |  C1  ...  -Cm-1          |
 		//        |      ...         -Cm     |
 		//        [            Cm-1   Cm  Cn ]  
 		// --------------------------------------------------------------------
-		// step 2:寻找矩阵P，使得约束矩阵对角化
+		// step 2: Find matrix P to make the constraint matrix diagonalized
 		//        
-		//        有地面：
+		//        With ground:
 		//        P * C = [ Cg                 -Cm ... -Cn ]
 		//                |    C1              -Cm ...     |
 		//                |       C2               ...  Cn | 
 		//                |          ...        Cm ...  Cn |
 		//                [              Cm-1      ...  Cn ]
-		//        无地面，此时第一行为空：
+		//        Without ground, at this time the first row is empty:
 		//        P * C = [                                ]
 		//                |    C1              -Cm ...     |
 		//                |       C2               ...  Cn | 
 		//                |          ...        Cm ...  Cn |
 		//                [              Cm-1      ...  Cn ]
 		// --------------------------------------------------------------------
-		// step 3:两边乘以矩阵D，并且可以取得子块F
-		//        矩阵D的定义为：  D1_6x6 * C1_6xn = I_6xn   其中n为约束的维数
+		// step 3: Multiply both sides by matrix D, and a sub-block F can be obtained
+		//        The definition of Matrix D is: D1_6x6 * C1_6xn = I_6xn where n is the dimension of constraints
 		// 
-		//        有地面：
+		//        With ground:
 		//                                                              cm            cn
 		//        D * P * C = [ I                                      -Cm  ...      -Cn ]
 		//                    |    [ I1 ]                           -D1*Cm  ...          |
@@ -810,7 +810,7 @@ namespace aris::dynamic{
 		//                    |                         [ Im-1 ]                         |
 		//                    [                         [   0  ]            ...  Dm-1*Cn ]  rm
 		//
-		//        无地面，此时第一行为空：
+		//        Without ground, at this time the first row is empty:
 		//                                                           cm            cn
 		//        D * P * C = [                                                       ]
 		//                    | [ I1 ]                           -D1*Cm  ...          |
@@ -821,18 +821,18 @@ namespace aris::dynamic{
 		//                    |                      [ Im-1 ]                         |
 		//                    [                      [   0  ]            ...  Dm-1*Cn ]  rm
 		//
-		//        抽出 cm ... cn 列，r2 ... rm 行，组成F
+		//        Extract cols cm ... cn, rows r2 ... rm, to form F
 		//        F = D * P * C  (r2 ... rm , cm ... cn)
 		// --------------------------------------------------------------------
-		// step 4:求解方程C' * xp = bc
-		//        该方程可化作：
+		// step 4: Solve the equation C\' * xp = bc
+		//        This equation can be formulated as:
 		//           C' * P' * D' * D'^-1 * P'^-1 * xp = bc
 		//           DPC' * D'^-1 * P'^-1 * xp = bc
 		//           DPC' * yp = bc
-		//        其中：yp = D'^-1 * P'^-1 * xp
+		//        where: yp = D\'^-1 * P\'^-1 * xp
 		//        
-		//        DPC' 和 yp 为
-		//        有地面：
+		//        DPC\' and yp are
+		//        With ground:
 		//                            r2        r3                  rm 
 		//        DPC' = [  I                                            ]      [    yp1   ]
 		//               |       [ I1 0 ]                                |      | -------- |
@@ -843,7 +843,7 @@ namespace aris::dynamic{
 		//               | ...      ...       ...   Cj'*Di'     ...      |      | [ ypam ] |
 		//               [ -Cn'             Cn'*D2' Cn'*Di'   Cn'*Dm-1'  ]  cn  [ [ ypfm ] ]
 		// 
-		//        无地面：
+		//        Without ground:
 		//                            r2        r3                  rm 
 		//        DPC' = [  0                                            ]
 		//               |  0    [ I1 0 ]                                |
@@ -854,7 +854,7 @@ namespace aris::dynamic{
 		//               |  0       ...       ...   Cj'*Di'     ...      | 
 		//               [  0               Cn'*D2' Cn'*Di'   Cn'*Dm-1'  ]  cn
 		// 
-		//        yp都一样：
+		//        yp is all the same:
 		//        yp   = [    yp1   ]
 		//               | -------- |
 		//               | [ ypa2 ] |
@@ -865,37 +865,37 @@ namespace aris::dynamic{
 		//               | -------- |
 		//               | [ ypam ] |
 		//               [ [ ypfm ] ]
-		//        而bc为：
+		//        while bc is:
 		//        bc   = [  bc1  ]
 		//               |  bc2  |
 		//               |  ...  |
 		//               [  bcn  ]
 		//
-		//        从而可以求得yp中的一部分：
+		//        thus a part of yp can be calculated:
 		//        [ ypa2 ]  =  [  bc1  ]
 		//        | ypa3 |     |  bc2  |
 		//        |  ... |     |  ...  |
 		//        [ ypam ]     [ bcm-1 ]
 		//
-		//        yp中的另外一部分需要用上文中的 F 来求，下文中的k是对应约束的维数：
+		//        the other part of yp requires F mentioned above, where k below is the corresponding constraint dimension:
 		//        F * [ ypf2 ]  =  [  bcm  ]   -   [ -Cm'  * D1(1:k,1:6)' * bc1 + ... + Cm'  * Dm-1(1:k,1:6)' * bcm-1 ]
 		//            | ypf3 |     | bcm+1 |       |  Cm+1'* D1(1:k,1:6)' * bc1 + ... + Cm+1'* Dm-1(1:k,1:6)' * bcm-1 |
 		//            |  ... |     |  ...  |       |                              ...                                 |
 		//            [ ypfm ]     [  bcn  ]       [ -Cn'  * D1(1:k,1:6)' * bc1 + ... + Cn'  * Dm-1(1:k,1:6)' * bcm-1 ]
 		// 
-		//        yp的最后一部分是yp1，它如下：
-		//        有地面：  yp1 = [0,0,0,0,0,0]'
-		//        无地面：  yp1 可以取任何值，本节中无法求得它的数值
-		//        求得yp后，可以求得xp
+		//        the last part of yp is yp1, as follows:
+		//        With ground:  yp1 = [0,0,0,0,0,0]'
+		//        Without ground:  yp1 can take any value, its value cannot be determined in this section
+		//        After determining yp, xp can be found
 		//        xp = P' * D' * yp = P' * diag([yp1,  D1(1:k,1:6)'*bc1 + D1(k+1:6,1:6)'*ypf2], ... ,  Dm-1(1:k,1:6)'*bcm-1 + Dm-1(k+1:6,1:6)'*ypfm])
 		//        
-		//        在实际的计算中，可以先将xp设为   D1(1:k,1:6)'*bc1，从而减少计算
+		//        In practical calculations, xp can first be set to D1(1:k,1:6)\'*bc1 to reduce computations
 		// --------------------------------------------------------------------
-		// step 5:求解方程 F' * ypf = bcf 的特解 xpf 和通解 S
-		//        这里的 F' 是从 F 矩阵中取出了一部分元素组成的矩阵，因为 yp 中的一部分已经求出来了
+		// step 5: Solve equation F\' * ypf = bcf for particular solution xpf and general solution S
+		//        Here F\' is a matrix formed by extracting some elements from matrix F, since part of yp has already been found
 		//
 		//        F * P = Q * R
-		//        这里R为：[R1 R2 | 0 0]
+		//        Here R is: [R1 R2 | 0 0]
 		//            1   r   n
 		//        1 [ * * * * * ]
 		//          |   * * * * |
@@ -904,12 +904,12 @@ namespace aris::dynamic{
 		//          |           |
 		//        m [           ]
 		//
-		//        这里求解：
+		//        Solving here:
 		//        F' * ypf = bcf
-		//        即：
+		//        i.e.:
 		//        P^-T * P' * F' * xpf = bcf
 		//        P^-T * R' * Q' * xpf = bcf
-		//        这里的R'为：
+		//        Here R\' is:
 		//            1   r   m
 		//        1 [ *         ]
 		//          | * *       |
@@ -917,7 +917,7 @@ namespace aris::dynamic{
 		//          | * * *     |
 		//          | * * *     |
 		//        n [ * * *     ]
-		//        于是Q' * x 的通解为：
+		//        Therefore the general solution of Q\' * x is:
 		//            1  m-r 
 		//        1 [       ]
 		//          |       |
@@ -925,18 +925,18 @@ namespace aris::dynamic{
 		//          | 1     |
 		//          |   1   |
 		//        m [     1 ]
-		//        于是x的通解S为以上左乘Q
+		//        Therefore the general solution S of x is multiplying Q from the left above
 		//        S = Q * [    0_rxr      ]
 		//                [ I_(m-r)x(m-r) ]
 		//
 		//        P^-T * R' * Q' * xpf = bcf
-		//        其特解为:
+		//        Its particular solution is:
 		//        Q * [ R1^-1   ]  *  P' * bcf
 		//            [       1 ]
 		// --------------------------------------------------------------------
-		// step 6:S是通解，现在需要求出G，从而利用惯性矩阵确定真实的约束力
-		//        根据S可以求得yp的通解：
-		//        有地面：
+		// step 6: S is the general solution, now G needs to be determined to find the true constraint forces using the inertia matrix
+		//        From S, the general solution of yp can be found:
+		//        With ground:
 		//        K1 = [ [   0   ] ]
 		//             | ......... |
 		//             | [   0   ] |
@@ -947,7 +947,7 @@ namespace aris::dynamic{
 		//             |    ...    |
 		//             | [   0   ] |
 		//             [ [ Sfm-1 ] ]
-		//        无地面：
+		//        Without ground:
 		//        K1 = [ I .         ]
 		//             | ........... |
 		//             |   . [  0  ] |
@@ -959,59 +959,59 @@ namespace aris::dynamic{
 		//             |   . [  0  ] |
 		//             [   . [ Sfn ] ]
 		//        
-		//        进一步可以求得xp的通解K：
+		//        Furthermore, the general solution K of xp can be determined:
 		//        K = P' * D' * K1        
 		//        
-		//        求得xp的通解K，那么最终方程为：
+		//        Once K is found, the final equation becomes:
 		//        [ I C ] * [ xpt + K*beta ] = [ bp ]
 		//                  [     xc       ]
-		//        可以化为：
+		//        Can be simplifed as:
 		//        [ C I*K ] * [  xc  ] = bp - I * xpt
 		//                    [ beta ]
 		//        
-		//        这个两边乘以 P*D ，可得：
+		//        Multiply both sides by P*D, we get:
 		//        [ PDC PDIK ] * [  xcf ] = PD(bp - I * xpt)
 		//                       [ beta ]
 		//        
-		//        PDC和PDIK在 cm ... cn : end 列，r2 ... rm 行，组成[F G]
-		//        有地面时，F和G的行数相同，G的列数为fm - fr:
+		//        PDC and PDIK in cols cm ... cn : end, rows r2 ... rm, form [F G]
+		//        With ground, F and G have identical number of rows, G\'s col count is fm - fr:
 		//        [ F  G ] * [  xcf ] = bpf
 		//                   [ beta ]
-		//        无地面时，G的行数为fm + 6, 列数为fm-fr+6：
+		//        Without ground, G\'s row count is fm + 6, col count is fm-fr+6:
 		//        [ F  G1 ] * [  xcf ] = [ bpf ]
 		//        [    G2 ]   [ beta ]   [ bp1 ]
 		// --------------------------------------------------------------------
-		// step 7:求出G后，可以进行下一步，求取 beta
-		//        既然已经求出过 F 的 QR 分解，那么可以先用F的Q乘以两侧: 注意，这里的G2 并非上文中无地面的G2
-		//        有地面时：
+		// step 7: After finding G, the next step is to find beta
+		//        Since F\'s QR decomposition was found, multiply by F\'s Q on both sides: Note, here G2 is not the previously mentioned ungrounded G2
+		//        With ground:
 		//                     fn    fm-fr
 		//        fr       [ R*P^-1  [Q'*G](   1:fr,:)  ] * [  xcf ] = [Q'*bpf](   1:fr)
 		//        fm-fr    [         [Q'*G](fr+1:fm,:)  ]   [ beta ]   [Q'*bpf](fr+1:fm)
-		//        无地面时：
+		//        Without ground:
 		//                     fn    fm-fr+6
 		//        fr       [ R*P^-1  [Q'*G1](   1:fr,:)  ] * [  xcf  ] = [ [Q'*bpf](   1:fr) ]
 		//        fm-fr    [         [Q'*G1](fr+1:fm,:)  ]   [ beta  ]   | [Q'*bpf](fr+1:fm) |
 		//        6        [                G2           ]               [       bp1         ]
 		//
-		//        求解右下角，即可得beta
-		//        最终可得xcf
+		//        Solving the lower right corner gives beta
+		//        Finally gives xcf
 		//
 		
 		PublicData* pd_{ nullptr };
 		std::vector<char> mem_pool_;
 
 		static auto one_constraint_upd_d_and_cp(Diag *d, bool cpt_cp)noexcept->void{
-			// 更新 pm //
+			// Update pm //
 			double pmI[16], pmJ[16];
 			auto b = &d->rel_.blk_data_[0];
 			s_pm_dot_pm(b->is_I_ ? d->pm_ : d->rd_->pm_, *b->cst_->makI()->prtPm(), pmI);
 			s_pm_dot_pm(b->is_I_ ? d->rd_->pm_ : d->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 			
-			// 计算 dm //
+			// Calculate dm //
 			d->rel_.blk_data_[0].cst_->cptGlbDmFromPm(d->dm_, pmI, pmJ);
 			if (!d->rel_.blk_data_[0].is_I_)s_iv(36, d->dm_);
 			
-			// 计算 cp //
+			// Calculate cp //
 			if (cpt_cp) {
 				if (auto mot = dynamic_cast<const aris::dynamic::MotionBase*>(d->rel_.blk_data_[0].cst_)) {
 					mot->cptCpFromPm(d->bc_, pmI, pmJ, d->rel_.blk_data_[0].mp_);
@@ -1022,50 +1022,50 @@ namespace aris::dynamic{
 			}
 		}
 		static auto revolute_upd_d_and_cp(Diag *d, bool cpt_cp)noexcept->void{
-			// 更新 pm //
+			// Update pm //
 			double pmI[16], pmJ[16];
 			auto b = &d->rel_.blk_data_[0];
 			s_pm_dot_pm(b->is_I_ ? d->pm_ : d->rd_->pm_, *b->cst_->makI()->prtPm(), pmI);
 			s_pm_dot_pm(b->is_I_ ? d->rd_->pm_ : d->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 			
-			// 计算 dm //
+			// Calculate dm //
 			d->rel_.blk_data_[0].cst_->cptGlbDmFromPm(d->dm_, pmI, pmJ);
 			if (!d->rel_.blk_data_[0].is_I_)s_iv(36, d->dm_);
 			
-			// 计算 cp //
+			// Calculate cp //
 			if (cpt_cp){
 				auto m = static_cast<const Motion*>(d->rel_.blk_data_[1].cst_);
 				
 				double rm[9], pm_j_should_be[16];
-				// 根据旋转关节的真实的 z 轴的转动，计算得到旋转矩阵 rm 
+				// Calculate rotation matrix rm based on true rotation around real z axis of revolute joint 
 				s_rmz(m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), rm);
 
 				s_vc(16, pmJ, pm_j_should_be);
-				// pmJ * rm -> pm_j_should_be 旋转矩阵相乘
+				// pmJ * rm -> pm_j_should_be Rotation matrices multiplication
 				s_mm(3, 3, 3, pmJ, 4, rm, 3, pm_j_should_be, 4);
 
 				double pm_j2i[16], ps_j2i[6];
 				s_inv_pm_dot_pm(pmI, pm_j_should_be, pm_j2i);
 				s_pm2ps(pm_j2i, ps_j2i);
 
-				// motion所对应的cp在最后 //
+				// The cp corresponding to motion is at the end //
 				s_vc(m->axis(), ps_j2i, d->bc_);
 				s_vc(5 - m->axis(), ps_j2i + m->axis() + 1, d->bc_ + m->axis());
 				d->bc_[5] = ps_j2i[m->axis()];
 			}
 		}
 		static auto prismatic_upd_d_and_cp(Diag *d, bool cpt_cp)noexcept->void{
-			// 更新 pm //
+			// Update pm //
 			double pmI[16], pmJ[16];
 			auto b = &d->rel_.blk_data_[0];
 			s_pm_dot_pm(b->is_I_ ? d->pm_ : d->rd_->pm_, *b->cst_->makI()->prtPm(), pmI);
 			s_pm_dot_pm(b->is_I_ ? d->rd_->pm_ : d->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 
-			// 计算 dm //
+			// Calculate dm //
 			d->rel_.blk_data_[0].cst_->cptGlbDmFromPm(d->dm_, pmI, pmJ);
 			if (!d->rel_.blk_data_[0].is_I_)s_iv(36, d->dm_);
 			
-			// 计算 cp //
+			// Calculate cp //
 			if (cpt_cp)	{
 				auto m = static_cast<const Motion*>(d->rel_.blk_data_[1].cst_);
 
@@ -1077,22 +1077,22 @@ namespace aris::dynamic{
 				s_inv_pm_dot_pm(pmI, pm_j_should_be, pm_j2i);
 				s_pm2ps(pm_j2i, ps_j2i);
 
-				// motion所对应的cp在最后 //
+				// The cp corresponding to motion is at the end //
 				s_vc(m->axis(), ps_j2i, d->bc_);
 				s_vc(5 - m->axis(), ps_j2i + m->axis() + 1, d->bc_ + m->axis());
 				d->bc_[5] = ps_j2i[m->axis()];
 			}
 		}
-		// 针对 Joint 和 Motion 约束的更新 diag 和 cp 的泛化版本的方法。
+		// Generalized method for updating diag and cp for Joint and Motion constraints.
 		static auto normal_upd_d_and_cp(Diag *d, bool cpt_cp)noexcept->void	{
 			Size pos{ 0 };
 			ARIS_LOOP_BLOCK(d->rel_.){
-				// 更新 pm //
+				// Update pm //
 				double pmI[16], pmJ[16];
 				s_pm_dot_pm(b->is_I_ ? d->pm_ : d->rd_->pm_, *b->cst_->makI()->prtPm(), pmI);
 				s_pm_dot_pm(b->is_I_ ? d->rd_->pm_ : d->pm_, *b->cst_->makJ()->prtPm(), pmJ);
 
-				// 计算 cp //
+				// Calculate cp //
 				if (cpt_cp) {
 					if (auto mot = dynamic_cast<const aris::dynamic::MotionBase*>(b->cst_)) {
 						mot->cptCpFromPm(d->bc_ + pos, pmI, pmJ, b->mp_);
@@ -1102,10 +1102,10 @@ namespace aris::dynamic{
 					}
 				}
 
-				// 计算 dm //
+				// Calculate dm //
 				double cmI_tem[36], cmJ_tem[36];
 				b->cst_->cptGlbCmFromPm(cmI_tem, cmJ_tem, pmI, pmJ);
-				// 使用计算的 Constraint matrix，更新 d->cmI_ 和 d->cmJ_
+				// Update d->cmI_ and d->cmJ_ using the calculated Constraint matrix
 				s_mc(6, b->cst_->dim(), cmI_tem, b->cst_->dim(), (b->is_I_ ? d->cmI_ : d->cmJ_) + pos, d->rel_.size_);
 				s_mc(6, b->cst_->dim(), cmJ_tem, b->cst_->dim(), (b->is_I_ ? d->cmJ_ : d->cmI_) + pos, d->rel_.size_);
 				pos += b->cst_->dim();
@@ -1124,7 +1124,7 @@ namespace aris::dynamic{
 		// for mem_pool
 		Size mem_pool_size = 0;
 
-		// 构建输入的 mots, jnts prts，以及相关的输入输出变量长度
+		// Construct input mots, jnts, prts and lengths of related input and output variables
 		int active_mot_size = 0,
 			active_mp_size = 0,
 			active_mot_dim = 0,
@@ -1135,7 +1135,7 @@ namespace aris::dynamic{
 		std::vector<const Part*> active_prt_vec;
 		std::vector<Joint*> active_jnt_vec;
 		{
-			// 构建 mots //
+			// Construct mots //
 			for (auto& mot : model()->motionPool()) {
 				if (mot.active()) {
 					active_mot_size++;
@@ -1165,20 +1165,20 @@ namespace aris::dynamic{
 				}
 			}
 
-			// 构建 prts //
+			// Construct prts //
 			active_prt_vec.push_back(&model()->ground());
 			for (auto& p : model()->partPool())if (p.active() && &p != &model()->ground())active_prt_vec.push_back(&p);
 
-			// 构建 jnts //
+			// Construct jnts //
 			for (auto& jnt : model()->jointPool())if (jnt.active())active_jnt_vec.push_back(&jnt);
 		}
 
-		// 构建公共变量区 //
+		// Construct public variable block //
 		PublicData pub_data;
 		s_vc(6, model()->environment().gravity(), pub_data.gravity_);
 		core::allocMem(mem_pool_size, imp_->pd_, 1);
 
-		// 构建子系统，先将prt 和 rel 分组 //
+		// Construct subsystems, first group prt and rel //
 		std::vector<std::vector<const Part*>> prt_vec_vec;
 		std::vector<std::vector<LocalRelation>> rel_vec_vec;
 		{
@@ -1212,16 +1212,16 @@ namespace aris::dynamic{
 				}
 				else{
 					ret->cst_pool_.push_back({ c, &c->makI()->fatherPart() == ret->prtI_, dynamic_cast<const MotionBase*>(c) ? mv_id : -1, dynamic_cast<const MotionBase*>(c) ? mp_id : -1 });
-					std::sort(ret->cst_pool_.begin(), ret->cst_pool_.end(), [](auto& a, auto& b){return a.cst_->dim() > b.cst_->dim();});//这里把大的约束往前放
+					std::sort(ret->cst_pool_.begin(), ret->cst_pool_.end(), [](auto& a, auto& b){return a.cst_->dim() > b.cst_->dim();});//Place larger constraints forward here
 					ret->size_ += c->dim();
-					ret->dim_ = ret->cst_pool_[0].cst_->dim();// relation 的 dim 以大的为准，最大的在第一个
+					ret->dim_ = ret->cst_pool_[0].cst_->dim();// relation dim follows the largest, the largest is first
 
 					mv_id += dynamic_cast<const MotionBase*>(c) ? (int)dynamic_cast<const MotionBase*>(c)->vSize() : 0;
 					mp_id += dynamic_cast<const MotionBase*>(c) ? (int)dynamic_cast<const MotionBase*>(c)->pSize() : 0;
 				}
 			}
 
-			// 划分出相关的Part和Relation //
+			// Separate related Part and Relation //
 			while (active_part_pool.size() > 1){
 				std::function<void(std::vector<const Part *> &part_pool_, std::vector<const Part *> &left_part_pool, std::vector<LocalRelation> &relation_pool, const Part *part)> addPart;
 				addPart = [&](std::vector<const Part *> &part_pool_, std::vector<const Part *> &left_part_pool, std::vector<LocalRelation> &relation_pool, const Part *part)->void	{
@@ -1229,7 +1229,7 @@ namespace aris::dynamic{
 
 					part_pool_.push_back(part);
 
-					// 如果不是地面，那么抹掉该杆件，同时添加该杆件的相关杆件 //
+					// If not ground, wipe out the part, and add related parts of the part //
 					if (part != left_part_pool.front())	{
 						left_part_pool.erase(std::find(left_part_pool.begin(), left_part_pool.end(), part));
 						for (auto &rel : relation_pool)	{
@@ -1257,20 +1257,20 @@ namespace aris::dynamic{
 					}
 				}
 
-				// 对sys的part和relation排序 //
+				// Sort parts and relations of sys //
 				for (Size i = 0; i < std::min(prt_vec.size(), rel_vec.size()); ++i)	{
-					// 先对part排序，找出下一个跟上一个part联系的part
+					// Sort parts first, find the next part linked to the previous part
 					std::sort(prt_vec.begin() + i, prt_vec.end(), [i, this, &rel_vec](const Part* a, const Part* b)	{
-						if (a == &this->model()->ground()) return true; // 地面最优先
-						if (b == &this->model()->ground()) return false; // 地面最优先
-						if (i == 0)return a->id() < b->id();// 第一轮先找地面或其他地面，防止下面的索引i-1出错
+						if (a == &this->model()->ground()) return true; // Ground has highest priority
+						if (b == &this->model()->ground()) return false; // Ground has highest priority
+						if (i == 0)return a->id() < b->id();// In the first round, find ground or other grounds first, to prevent the index i-1 below from failing
 						if (b == rel_vec[i - 1].prtI_) return false;
 						if (b == rel_vec[i - 1].prtJ_) return false;
 						if (a == rel_vec[i - 1].prtI_) return true;
 						if (a == rel_vec[i - 1].prtJ_) return true;
 						return a->id() < b->id();
 					});
-					// 再插入连接新part的relation
+					// Then insert relations connecting the new part
 					std::sort(rel_vec.begin() + i, rel_vec.end(), [i, this, &prt_vec](Relation a, Relation b){
 						auto pend = prt_vec.begin() + i + 1;
 						auto a_part_i = std::find_if(prt_vec.begin(), pend, [a](const Part* p)->bool { return p == a.prtI_; });
@@ -1291,7 +1291,7 @@ namespace aris::dynamic{
 			}
 		}
 
-		// 构建子系统 //
+		// Construct subsystem //
 		std::vector<SubSystem> sys_vec;
 		std::vector<std::vector<Diag>> d_vec_vec;
 		std::vector<std::vector<LocalRemainder>> r_vec_vec;
@@ -1300,13 +1300,13 @@ namespace aris::dynamic{
 			auto &prt_vec = prt_vec_vec[i];
 			auto &rel_vec = rel_vec_vec[i];
 
-			// 插入SubSystem //
+			// Insert SubSystem //
 			sys_vec.push_back(SubSystem());
 			auto &sys = sys_vec.back();
 			sys.max_error_ = maxError();
 			sys.has_ground_ = (prt_vec.front() == &model()->ground());
 
-			// 制造 d_vec (diag_vec) //
+			// Produce d_vec (diag_vec) //
 			core::allocMem(mem_pool_size, sys.d_data_, prt_vec.size());
 			d_vec_vec.push_back(std::vector<Diag>());
 			auto &d_vec = d_vec_vec.back();
@@ -1316,30 +1316,30 @@ namespace aris::dynamic{
 				auto &diag = d_vec[i];
 				auto &rel = rel_vec[i - 1];
 
-				// 根据diag更改是否为I part
+				// Change whether it is an I part based on diag
 				if (rel.prtI_ != prt_vec.at(i))	{
 					std::swap(rel.prtI_, rel.prtJ_);
 					for (auto &c : rel.cst_pool_)c.is_I_ = !c.is_I_;
 				}
 				diag.part_ = prt_vec[i];
 
-				// 分配 Relation::Block 内存
+				// Allocate Relation::Block memory
 				core::allocMem(mem_pool_size, rel.blk_data_, rel.cst_pool_.size());
 
-				// 分配 Diag中 p bc xc 的尺寸
+				// Allocate size of p bc xc in Diag
 				core::allocMem(mem_pool_size, d_vec[i].p_, rel.size_);
 				core::allocMem(mem_pool_size, d_vec[i].bc_, rel.size_);
 				core::allocMem(mem_pool_size, d_vec[i].xc_, rel.size_);
 
-				// 计算 max_cm 的尺寸
+				// Calculate size of max_cm
 				max_cm_size = std::max(max_cm_size, rel.size_);
 
-				// 以下优化dm矩阵的计算，因为优化会改变系统所需内存的计算，因此必须放到这里 //
+				// Optimize the calculation of dm matrix below, because optimization changes calculation of system required memory, must be placed here //
 				{
-					if (rel.cst_pool_.size() == 1){ // 针对约束仅仅有一个时的优化 //
+					if (rel.cst_pool_.size() == 1){ // Optimization for when there is only one constraint //
 						diag.upd_d_and_cp_ = Imp::one_constraint_upd_d_and_cp;
 					}
-					// 针对转动副加转动电机 //
+					// Optimization for revolute joint with rotary motor //
 					else if (rel.cst_pool_.size() == 2
 						&& dynamic_cast<const RevoluteJoint*>(rel.cst_pool_.at(0).cst_)
 						&& dynamic_cast<const Motion*>(rel.cst_pool_.at(1).cst_)
@@ -1349,7 +1349,7 @@ namespace aris::dynamic{
 						diag.upd_d_and_cp_ = Imp::revolute_upd_d_and_cp;
 						rel.dim_ = 6;
 					}
-					// 针对移动副加移动电机 //
+					// Optimization for prismatic joint with prismatic motor //
 					else if (rel.cst_pool_.size() == 2
 						&& dynamic_cast<const PrismaticJoint*>(rel.cst_pool_.at(0).cst_)
 						&& dynamic_cast<const Motion*>(rel.cst_pool_.at(1).cst_)
@@ -1359,14 +1359,14 @@ namespace aris::dynamic{
 						diag.upd_d_and_cp_ = Imp::prismatic_upd_d_and_cp;
 						rel.dim_ = 6;
 					}
-					// 不优化 //
+					// Do not optimize //
 					else{
 						diag.upd_d_and_cp_ = Imp::normal_upd_d_and_cp;
 					}
 				}
 			}
 
-			// 制造 r_vec (remainder_vec) //
+			// Produce r_vec (remainder_vec) //
 			core::allocMem(mem_pool_size, sys.r_data_, rel_vec.size() - prt_vec.size() + 1);
 			r_vec_vec.push_back(std::vector<LocalRemainder>());
 			auto &r_vec = r_vec_vec.back();
@@ -1391,7 +1391,7 @@ namespace aris::dynamic{
 					auto diag_part = d_rel.prtI_;
 					auto add_part = d_rel.prtJ_;
 
-					// 判断当前remainder加法元素是否存在（不为0）
+					// Determine if current remainder addition element exists (not 0)
 					auto diag_blk = std::find_if(r.cm_blk_series.begin(), r.cm_blk_series.end(), [&](Remainder::Block &blk) {return blk.diag_->part_ == diag_part; });
 					auto add_blk = std::find_if(r.cm_blk_series.begin(), r.cm_blk_series.end(), [&](Remainder::Block &blk) {return blk.diag_->part_ == add_part; });
 					if (diag_blk != r.cm_blk_series.end()){
@@ -1409,21 +1409,21 @@ namespace aris::dynamic{
 					}
 				}
 
-				// 分配 Relation::Block 内存
+				// Allocate Relation::Block memory
 				core::allocMem(mem_pool_size, rel.blk_data_, rel.cst_pool_.size());
 
-				// 分配 Remainder 中 cmI_vec, cmJ_vec, bc_vec, xc_vec 的尺寸
+				// Allocate size of cmI_vec, cmJ_vec, bc_vec, xc_vec in Remainder
 				core::allocMem(mem_pool_size, r_vec[i].cmI_, 6 * rel.size_);
 				core::allocMem(mem_pool_size, r_vec[i].cmJ_, 6 * rel.size_);
 				core::allocMem(mem_pool_size, r_vec[i].bc_, rel.size_);
 				core::allocMem(mem_pool_size, r_vec[i].xc_, rel.size_);
 
-				// 分配 Remainder::Block 内存
+				// Allocate Remainder::Block memory
 				r_vec[i].blk_size_ = r.cm_blk_series.size();
 				core::allocMem(mem_pool_size, r_vec[i].blk_data_, r.cm_blk_series.size());
 			}
 			
-			// 更新子系统尺寸 //
+			// Update subsystem size //
 			sys.fm_ = 0;
 			sys.fn_ = 0;
 			for (Size i = 1; i < d_vec.size(); ++i)sys.fm_ += rel_vec[i - 1].dim_;
@@ -1441,7 +1441,7 @@ namespace aris::dynamic{
 		}
 		core::allocMem(mem_pool_size, pub_data.subsys_data_, sys_vec.size());
 
-		// 计算所需公共的内存及偏移
+		// Calculate shared memory and offset required
 		pub_data.active_mot_dim_ = active_mot_dim;
 		pub_data.active_mot_size_ = active_mot_size;
 		pub_data.active_mp_size_ = active_mp_size;
@@ -1479,10 +1479,10 @@ namespace aris::dynamic{
 		core::allocMem(mem_pool_size, pub_data.h_, pub_data.nM_);
 		core::allocMem(mem_pool_size, pub_data.get_diag_from_part_id_, model()->partPool().size());
 
-		// 分配内存
+		// Allocate memory
 		imp_->mem_pool_.resize(mem_pool_size);
 
-		// 更新公共变量区 //
+		// Update public variable block //
 		{
 			imp_->pd_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_);
 			*imp_->pd_ = pub_data;
@@ -1492,7 +1492,7 @@ namespace aris::dynamic{
 			imp_->pd_->active_mp_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->active_mp_);
 			imp_->pd_->deactive_mp_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->deactive_mp_);
 
-			// 获得雅可比部分的内存 //
+			// Obtain memory for the Jacobian part //
 			imp_->pd_->Jg_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->Jg_);
 			imp_->pd_->cg_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->cg_);
 			imp_->pd_->M_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->M_);
@@ -1523,7 +1523,7 @@ namespace aris::dynamic{
 		std::copy_n(active_mot_vec.data(), active_mot_vec.size(), imp_->pd_->active_mots_);
 		std::copy_n(deactive_mot_vec.data(), deactive_mot_vec.size(), imp_->pd_->deactive_mots_);
 
-		// 将内存付给子系统，并初始化 //
+		// Assign memory to subsystem and initialize //
 		for (int i = 0; i < sys_vec.size(); ++i){
 			auto &sys = sys_vec[i];
 			auto &prt_vec = prt_vec_vec[i];
@@ -1533,7 +1533,7 @@ namespace aris::dynamic{
 
 			sys.pd_ = imp_->pd_;
 
-			// 更新 diags //
+			// Update diags //
 			sys.d_data_ = core::getMem(imp_->mem_pool_.data(), sys.d_data_);
 			sys.d_size_ = d_vec.size();
 			for (int i = 0; i < sys.d_size_; ++i) {
@@ -1549,7 +1549,7 @@ namespace aris::dynamic{
 				auto &diag = sys.d_data_[i];
 				auto &rel = rel_vec.at(i - 1);
 
-				// 获取 Block::Relation 内存 //
+				// Obtain Block::Relation memory //
 				{
 					rel.blk_data_ = core::getMem(imp_->mem_pool_.data(), rel.blk_data_);
 					rel.blk_size_ = rel.cst_pool_.size();
@@ -1557,24 +1557,24 @@ namespace aris::dynamic{
 					diag.rel_ = static_cast<aris::dynamic::Relation>(rel);
 				}
 				
-				// 获取 p_vec 内存 //
+				// Obtain p_vec memory //
 				diag.p_ = core::getMem(imp_->mem_pool_.data(), diag.p_);
 				diag.bc_ = core::getMem(imp_->mem_pool_.data(), diag.bc_);
 				diag.xc_ = core::getMem(imp_->mem_pool_.data(), diag.xc_);
 				std::iota(diag.p_, diag.p_ + rel.size_, 0);
 
-				// 更新 blk 对应的 mp 位置
+				// Update mp position corresponding to blk
 				ARIS_LOOP_BLOCK(diag.rel_.) {
 					b->mp_ = imp_->pd_->active_mp_ + b->mot_mp_pos_;
 				}
 
-				// 初始化 diag //
+				// Initialize diag //
 				diag.rd_ = std::find_if(sys.d_data_, sys.d_data_ + sys.d_size_, [&](Diag &d) {return d.part_ == rel.prtJ_; });
 				diag.pm_ = diag.pm1_;
 				diag.last_pm_ = diag.pm2_;
 			}
 
-			// 更新 remainders //
+			// Update remainders //
 			sys.r_data_ = reinterpret_cast<Remainder*>(imp_->mem_pool_.data() + *reinterpret_cast<Size*>(&sys.r_data_));
 			sys.r_size_ = r_vec.size();
 			for(int i = 0; i < sys.r_size_; ++i)sys.r_data_[i] = static_cast<aris::dynamic::Remainder>(r_vec[i]);
@@ -1582,7 +1582,7 @@ namespace aris::dynamic{
 				auto &r = sys.r_data_[i];
 				auto &rel = rel_vec[i + sys.d_size_ - 1];
 
-				// 获取 Relation::Block 内存
+				// Obtain Relation::Block memory
 				{
 					rel.blk_data_ = core::getMem(imp_->mem_pool_.data(), rel.blk_data_);
 					rel.blk_size_ = rel.cst_pool_.size();
@@ -1590,31 +1590,31 @@ namespace aris::dynamic{
 					r.rel_ = static_cast<aris::dynamic::Relation>(rel);
 				}
 
-				// 分配 Remainder 中 cmI_, cmJ_, bc_, xc_ 的尺寸
+				// Allocate size of cmI_, cmJ_, bc_, xc_ in Remainder
 				r.cmI_ = core::getMem(imp_->mem_pool_.data(), r.cmI_);
 				r.cmJ_ = core::getMem(imp_->mem_pool_.data(), r.cmJ_);
 				r.bc_ = core::getMem(imp_->mem_pool_.data(), r.bc_);
 				r.xc_ = core::getMem(imp_->mem_pool_.data(), r.xc_);
 
-				// 获取 Remainder::Block 内存
+				// Obtain Remainder::Block memory
 				r.blk_data_ = core::getMem(imp_->mem_pool_.data(), r.blk_data_);
 				for (int j = 0; j < r.blk_size_; ++j){
 					r.blk_data_[j] = r_vec[i].cm_blk_series[j];
 					r.blk_data_[j].diag_ = sys.d_data_ + (r.blk_data_[j].diag_ - d_vec.data());
 				}
 
-				// 更新 mp //
+				// Update mp //
 				ARIS_LOOP_BLOCK(r.rel_.) {
 					b->mp_ = imp_->pd_->active_mp_ + b->mot_mp_pos_;
 				}
 				
-				// 构建 r
+				// Construct r
 				r.i_diag_ = std::find_if(sys.d_data_, sys.d_data_ + sys.d_size_, [&rel](Diag& d) {return rel.prtI_ == d.part_; });
 				r.j_diag_ = std::find_if(sys.d_data_, sys.d_data_ + sys.d_size_, [&rel](Diag& d) {return rel.prtJ_ == d.part_; });
 			}
 		}
 
-		// 分配根据part id寻找diag的vector //
+		// Allocate vector to find diag based on part id //
 		imp_->pd_->get_diag_from_part_id_ = core::getMem(imp_->mem_pool_.data(), imp_->pd_->get_diag_from_part_id_);
 		for (auto &sys : sys_vec)
 			for (auto diag = sys.d_data_; diag < sys.d_data_ + sys.d_size_; ++diag)
@@ -1640,19 +1640,19 @@ namespace aris::dynamic{
 		s_fill(6, 1, 0.0, const_cast<double *>(model()->ground().vs()));
 		ARIS_LOOP_SYS sys->kinVel();
 
-		// 计算成功，设置各杆件 //
+		// Calculation successful, set parts //
 		ARIS_LOOP_SYS ARIS_LOOP_SYS_D s_va(6, d->xp_, const_cast<double*>(d->part_->vs()));
 
 		return 0;
 	}
 	auto UniversalSolver::dynAccAndFce()->int{
-		// 更新杆件位姿，每个杆件外力 //
+		// Update part pose, external force of each part //
 		ARIS_LOOP_SYS ARIS_LOOP_SYS_D {
 			d->part_->getPm(d->pm_);
 			std::fill(d->bp_, d->bp_ + 6, 0.0);
 		}
 
-		// 更新外力 //
+		// Update external force //
 		for (auto &fce : model()->forcePool()){
 			if (fce.active()){
 				double fsI[6], fsJ[6];
@@ -1666,11 +1666,11 @@ namespace aris::dynamic{
 			}
 		}
 
-		// 更新地面的as //
+		// Update ground as //
 		s_fill(6, 1, 0.0, const_cast<double *>(model()->ground().as()));
 		ARIS_LOOP_SYS sys->dynAccAndFce();
 
-		// 计算成功，设置各关节和杆件
+		// Calculation successful, set joints and parts
 		ARIS_LOOP_SYS {
 			ARIS_LOOP_SYS_R	{
 				Size pos{ 0 };
@@ -1748,7 +1748,7 @@ namespace aris::dynamic{
 		}
 	}
 	auto UniversalSolver::kinPosSetActiveMotionPos(const double* mp)->void {
-		// 将各驱动位置与杆件位姿拷贝到局部变量中 //
+		// Copy the positions of drives and part poses into local variables //
 		s_vc(imp_->pd_->active_mp_size_, mp, imp_->pd_->active_mp_);
 	}
 	auto UniversalSolver::kinPosSetMotionPosFromModel()->void {
@@ -1761,7 +1761,7 @@ namespace aris::dynamic{
 		const double pm[16]{ 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 };
 		s_mc(4, 4, pm, const_cast<double*>(*model()->ground().pm()));
 
-		// 将杆件位姿拷贝到局部变量中 //
+		// Copy part poses into local variables //
 		ARIS_LOOP_SYS ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
 
 		setError(0.0);
@@ -1876,7 +1876,7 @@ namespace aris::dynamic{
 		ARIS_LOOP_SYS{
 			ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
 			
-			// 动力学计算，和dynAccAndFce() 一模一样 //
+			// Kinematics/Dynamics calculation, exactly the same as dynAccAndFce() //
 			sys->updDiagIv();
 			sys->updDmCm(false);
 
@@ -1902,8 +1902,8 @@ namespace aris::dynamic{
 				sys->sovXc();
 			};
 
-			// 开始计算h //
-			// 先去掉驱动的加速度, 并计算h
+			// Start calculating h //
+			// First remove the acceleration of drive, and calculate h
 			auto clearMotionMa = [](Relation &rel, double *bc){
 				Size pos = 0;
 				ARIS_LOOP_BLOCK(rel.){
@@ -1912,7 +1912,7 @@ namespace aris::dynamic{
 						double ma_old[6];
 						s_vc(gm->dim(), gm->a(), ma_old);
 
-						// 计算驱动导致的ca //
+						// Calculate ca caused by drive //
 						double old_ca[6];
 						gm->cptCa(old_ca);
 
@@ -1922,7 +1922,7 @@ namespace aris::dynamic{
 
 						s_vs(gm->dim(), ca, old_ca);
 
-						// 加到 bc 上 //
+						// Add to bc //
 						s_vs(gm->dim(), old_ca, bc + pos);
 
 						// restore to old value //
@@ -1935,11 +1935,11 @@ namespace aris::dynamic{
 			ARIS_LOOP_SYS_D clearMotionMa(d->rel_, d->bc_);
 			ARIS_LOOP_SYS_R clearMotionMa(r->rel_, r->bc_);
 
-			// 动力学计算并取出h
+			// Kinematics calculation and extract h
 			dynamic();
 			auto getH = [&](Relation &rel, double *xc){
 				Size pos{ 0 };
-				// 将Xcf更新 //
+				// Update Xcf //
 				ARIS_LOOP_BLOCK(rel.){
 					if (auto gm = dynamic_cast<const MotionBase*>(b->cst_)){
 						s_vc(gm->dim(), xc + pos, h + b->mot_dim_pos_);
@@ -1950,7 +1950,7 @@ namespace aris::dynamic{
 			ARIS_LOOP_SYS_D getH(d->rel_, d->xc_);
 			ARIS_LOOP_SYS_R getH(r->rel_, r->xc_);
 
-			// 开始计算M //
+			// Start calculating M //
 			auto getMColumn = [&](const Constraint *c, Size cid){
 				auto nM = this->nM();
 				auto getMRow = [&](Relation &rel, double *xc){
@@ -1990,7 +1990,7 @@ namespace aris::dynamic{
 							// diff between old & new //
 							s_vs(gm->dim(), caa, new_ca);
 
-							// 加到 bc 上 //
+							// Add to bc //
 							s_va(gm->dim(), new_ca, bc + pos);
 
 							dynamic();
@@ -2013,7 +2013,7 @@ namespace aris::dynamic{
 	auto UniversalSolver::M()const noexcept->const double * { return imp_->pd_->M_; }
 	auto UniversalSolver::h()const noexcept->const double * { return imp_->pd_->h_; }
 	auto UniversalSolver::cptProjectedMassMatrix() noexcept -> void {
-		// 方法 1，直接构造法
+		// Method 1, direct construction
 // 		auto M = imp_->pd_->M_;
 // 		auto h = imp_->pd_->h_;
 		
@@ -2024,32 +2024,32 @@ namespace aris::dynamic{
 // 		ARIS_LOOP_SYS{
 // 			ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
 			
-// 			// 动力学计算，和dynAccAndFce() 一模一样 //
+// 			// Kinematics/Dynamics calculation, exactly the same as dynAccAndFce() //
 // 			sys->updDiagIv();
 // 			sys->updDmCm(false);
 
 // 			sys->updF();
 // 			sys->updG();
 // 			sys->updCa();
-// 		// 在 updG() 开头分配 K 和 M_beta_K
+// 		// Allocate K and M_beta_K at the beginning of updG()
 // Eigen::MatrixXd M_beta_K(d, d);
 // std::vector<std::vector<Eigen::Vector6d>> K_cols(d, std::vector<Eigen::Vector6d>(d_size_));
 
 // for (Size j = 0; j < d; ++j) {
-//     // ... 现有代码：设置 xpf，变换得到 xp（但先不乘以 I）...
-//     // 保存 K 的第 j 列
+//     // ... Existing code: set xpf, transform to xp (but do not multiply by I first)...
+//     // Save the j-th column of K
 //     for (Size i = 0; i < d_size_; ++i) {
 //         K_cols[j][i] = Eigen::Vector6d(d_data_[i].xp_);
 //     }
-//     // 然后乘以 I 并继续构造 G ...
+//     // Then multiply by I and continue building G...
 // }
 
-// // 组装 M_beta_K
+// // Assemble M_beta_K
 // for (Size i = 0; i < d; ++i) {
 //     for (Size j = 0; j <= i; ++j) {
 //         double val = 0.0;
 //         for (Size part = 0; part < d_size_; ++part) {
-//             // 计算 f_j_part = I_part * K_cols[j][part]
+//             // Calculate f_j_part = I_part * K_cols[j][part]
 //             Eigen::Vector6d f_j_part;
 //             s_iv_dot_as(d_data_[part].iv_, K_cols[j][part].data(), f_j_part.data());
 //             val += K_cols[i][part].dot(f_j_part);
@@ -2058,11 +2058,11 @@ namespace aris::dynamic{
 //         M_beta_K(j, i) = val;
 //     }
 // }
-		// 方法2，通过矩阵G直接推导法
+		// Method 2, direct derivation via matrix G
 		ARIS_LOOP_SYS{
 			ARIS_LOOP_SYS_D d->part_->getPm(d->pm_);
 			
-			// 动力学计算，和dynAccAndFce() 一模一样 //
+			// Kinematics/Dynamics calculation, exactly the same as dynAccAndFce() //
 			sys->updDiagIv();
 			sys->updDmCm(false);
 
@@ -2082,32 +2082,32 @@ namespace aris::dynamic{
 		int ground_id = model()->ground().id();
 
 		auto inverse_pd = [](Size m, double* A) {
-		  // 假设A和invA都是按行主元存储，leading dimension 为 m
+		  // Assume A and invA are row-major, leading dimension is m
 		  std::vector<double> L(m * m);
 		  s_llt(m, A, m, L.data(), m);  // A = L * L^T
 		  std::vector<double> invL(m * m);
 		  s_inv_lm(m, L.data(), m, invL.data(), m);  // invL = L^{-1}
-		  // 计算 invA = invL^T * invL
-		  // 使用s_mm: C = alpha * A * B, 这里 alpha=1, A = invL^T (列主元？), B = invL (行主元)
-		  // s_mm 函数签名: s_mm(m, n, k, alpha, A, a_t, B, b_t, C, c_t)
-		  // 我们计算 m x m 矩阵 invL^T * invL:
-		  //  A是invL的转置，即以列主元看待invL，即 a_t = T(m) (因为转置后leading dim是m，而实际上aris的T(ColMajor(m)) 或者 T(m) 对应列主元)
-		  // 或者我们可以直接循环或使用s_mm并提供合适的类型。
-		  // 简便方法：注意到invA是对称的，可以用s_mm(m, m, m, invL, m, invL, T(m), invA, m)？需要检查。
-		  // 在aris中，invL按行主元存储，即RowMajor(m)。其转置相当于ColMajor(m)。所以在s_mm中，我们可以指定a_t = T(m) (即ColMajor)，b_t = m (RowMajor)，c_t = m。
+		  // Calculate invA = invL^T * invL
+		  // Use s_mm: C = alpha * A * B, where alpha=1, A = invL^T (column-major?), B = invL (row-major)
+		  // s_mm Function signature: s_mm(m, n, k, alpha, A, a_t, B, b_t, C, c_t)
+		  // We calculate m x m matrix invL^T * invL:
+		  //  A is transpose of invL, interpreted as column-major, i.e., a_t = T(m) (since after transpose leading dim is m, and in aris T(ColMajor(m)) or T(m) corresponds to column-major)
+		  // Or we could loop directly or use s_mm providing appropriate types.
+		  // Convenient way: notice invA is symmetric, can use s_mm(m, m, m, invL, m, invL, T(m), invA, m)? Need to check.
+		  // In aris, invL is stored row-major, i.e., RowMajor(m). Its transpose is equivalent to ColMajor(m). So in s_mm, we can specify a_t = T(m), b_t = m, c_t = m.
 		  s_mm(m, m, m, 1.0, invL.data(), T(m), invL.data(), m, A, m);
 		};
-		// 2. 确定每个接触中两个物体各自所在的子系统及局部刚体索引
+		// 2. Determine the subsystems and local body indices for the two objects in each contact
     struct ContactInfo {
-      int sys1, sys2;          // 子系统索引，-1 表示该物体为地面
-      int local_body1, local_body2; // 在子系统 d_data_ 内的索引，地面无意义
+      int sys1, sys2;          // Subsystem index, -1 means the object is ground
+      int local_body1, local_body2; // Index in subsystem d_data_, ground is meaningless
 			double* T;
       double* pt;
     };
     std::vector<ContactInfo> contact_info(nContact);
    	for (int ic = 0; ic < nContact; ++ic) {
 			int p1 = partid[2 * ic], p2 = partid[2 * ic + 1];
-      // 查找所属子系统
+      // Look up affiliated subsystem
       int s1 = -1, s2 = -1, lb1 = -1, lb2 = -1;
 			if (p1 == ground_id) 
 				s1 = -1;
@@ -2131,16 +2131,16 @@ namespace aris::dynamic{
 			}
 			contact_info[ic] = {s1, s2, lb1, lb2, {T_vec + ic * 16}, {contactPoint + 3*ic}};
     }
-    // 3. 分配输出矩阵
-    const int rows_per_contact = 6;   // 物体1:3行，物体2:3行
+    // 3. Allocate output matrix
+    const int rows_per_contact = 6;   // Object 1: 3 rows, object 2: 3 rows
     const int J_rows = rows_per_contact * nContact;
     A_out.resize(J_rows * J_rows, 0.0);
 
-		// 收集本子系统涉及的非地面物体任务
+		// Collect non-ground object tasks involved in this subsystem
     struct Task {
-      int contact_idx;   // 全局接触编号
-      int obj_idx;       // 0 表示物体1，1 表示物体2
-      int local_body;    // 在该子系统内的刚体索引
+      int contact_idx;   // Global contact index
+      int obj_idx;       // 0 indicates Object 1, 1 indicates Object 2
+      int local_body;    // Body index within the subsystem
 			double* T;
       double* point;
     };
@@ -2148,7 +2148,7 @@ namespace aris::dynamic{
 			d->part_->getPm(d->pm_);
 			std::fill(d->bp_, d->bp_ + 6, 0.0);
 		}
-		// 更新外力 //
+		// Update external force //
 		for (auto &fce : model()->forcePool()){
 			if (fce.active()){
 				double fsI[6], fsJ[6];
@@ -2161,7 +2161,7 @@ namespace aris::dynamic{
 					s_vs(6, fsJ, imp_->pd_->get_diag_from_part_id_[fce.makJ()->fatherPart().id()]->bp_);
 			}
 		}
-		// 更新地面的as //
+		// Update ground as //
 		s_fill(6, 1, 0.0, const_cast<double *>(model()->ground().as()));
 
 		ARIS_LOOP_SYS{
@@ -2170,7 +2170,7 @@ namespace aris::dynamic{
 			Size s = sys - subsys;
     	for (int ic = 0; ic < nContact; ++ic) {
     	  const auto& info = contact_info[ic];
-    	  if (info.sys1 == s) {  // 只有非地面（sys1 != -1）
+    	  if (info.sys1 == s) {  // Only non-ground (sys1 != -1)
     	    tasks.push_back({ic, 0, info.local_body1, info.T, info.pt});
     	    involvedLocalBodies.insert(info.local_body1);
     	  }
@@ -2179,14 +2179,14 @@ namespace aris::dynamic{
     	    involvedLocalBodies.insert(info.local_body2);
     	  }
     	}
-			if (tasks.empty()) continue;  // 该子系统无相关非地面物体
+			if (tasks.empty()) continue;  // This subsystem has no related non-ground objects
 
 			// ARIS_LOOP_SYS_D {
 			// 	d->part_->getPm(d->pm_); 
 			// 	// std::fill(d->bp_, d->bp_ + 6, 0.0);
 			// }
 			
-			// 动力学计算，和dynAccAndFce() 一模一样 //
+			// Kinematics/Dynamics calculation, exactly the same as dynAccAndFce() //
 			sys->updDiagIv();
 			sys->updDmCm(false);
 
@@ -2202,23 +2202,23 @@ namespace aris::dynamic{
 			inverse_pd(gn, invM_beta.data());
 			// aris::dynamic::dsp(gn, gn, invM_beta.data());
 
-			// ---- 4.3 数值扰动 β，提取所需物体的点雅可比 ----
+			// ---- 4.3 Numerical perturbation of beta, extract point Jacobian for desired objects ----
       std::vector<Size> targetBodies(involvedLocalBodies.begin(), involvedLocalBodies.end());
       std::unordered_map<int,int> bodyToPos;
       for (size_t t = 0; t < targetBodies.size(); ++t)
         bodyToPos[targetBodies[t]] = t;
 
-       // 保存/清零速度
+       // Save/clear velocity
       std::vector<std::array<double,6>> save_xp(sys->d_size_);
       for (int b = 0; b < sys->d_size_; ++b)
         std::copy_n(sys->d_data_[b].xp_, 6, save_xp[b].begin());
 
-			// ---- 3.3 构建本子系统的雅可比片段 J_sub (J_rows × n_beta) ----
+			// ---- 3.3 Construct Jacobian segment J_sub (J_rows x n_beta) for this subsystem ----
       std::vector<double> J_sub(J_rows * gn, 0.0);
       std::vector<double> xpf(sys->fm_, 0.0);
       std::vector<double> target_xp(targetBodies.size() * 6);
 
-      // 扰动 β
+      // Perturb beta
       for (int j = 0; j < sys->gn_; ++j) {
         for (int b = 0; b < sys->d_size_; ++b)
           std::fill_n(sys->d_data_[b].xp_, 6, 0.0);
@@ -2241,13 +2241,13 @@ namespace aris::dynamic{
           }
         }
 
-        // 提取目标刚体速度
+        // Extract target body velocity
         for (size_t t = 0; t < targetBodies.size(); ++t) {
           int b = targetBodies[t];
           std::copy_n(sys->d_data_[b].xp_, 6, target_xp.data() + 6*t);
         }
 
-        // 填入 J_sub 的第 j 列
+        // Fill into the j-th column of J_sub
         for (const auto& task : tasks) {
           int pos = bodyToPos[task.local_body];
           const double* v = target_xp.data() + 6*pos;
@@ -2269,11 +2269,11 @@ namespace aris::dynamic{
         }
       }
 
-      // 恢复速度
+      // Restore velocity
       for (int b = 0; b < sys->d_size_; ++b)
         std::copy_n(save_xp[b].begin(), 6, sys->d_data_[b].xp_);
 
-      // ---- 3.4 累加 A += J_sub * M_inv * J_sub^T ----
+      // ---- 3.4 Accumulate A += J_sub * M_inv * J_sub^T ----
       for (int i = 0; i < J_rows; ++i) {
         for (int k = 0; k < gn; ++k) {
           double tmp = 0.0;
@@ -2286,14 +2286,14 @@ namespace aris::dynamic{
 			sys->sovXcRemain();
     }
 		
-    // 对称填充下三角
+    // Symmetrically fill lower triangle
     for (int i = 0; i < J_rows; ++i)
       for (int j = i+1; j < J_rows; ++j)
         A_out[j * J_rows + i] = A_out[i * J_rows + j];
 
 		// ARIS_LOOP_SYS sys->dynAccAndFce();
 
-		// 计算成功，设置各关节和杆件
+		// Calculation successful, set joints and parts
 		ARIS_LOOP_SYS 
 			ARIS_LOOP_SYS_D 
 				s_vc(6, d->xp_, const_cast<double*>(d->part_->as()));
@@ -2326,8 +2326,8 @@ namespace aris::dynamic{
 #undef ARIS_LOOP_SYS_R
 #undef ARIS_LOOP_BLOCK
 
-	// 在创建的时候记录 prt jnt mot gm fce 的激活状态
-	// 并在销毁的时候将记录的状态设置回去，放置在方法调用时放置过程中修改导致的状态不一致
+	// Record activation states of prt jnt mot gm fce upon creation
+	// And restore recorded states on destruction, to prevent state inconsistencies caused by modifications during method calls
 	class HelpResetRAII{
 	public:
 		std::vector<bool> prt_active_, jnt_active_, mot_active_, gm_active_, fce_active_;
@@ -2396,7 +2396,7 @@ namespace aris::dynamic{
 	auto ForwardKinematicSolver::cptJacobi() noexcept->void{
 		cptGeneralJacobi();
 
-		// 需要根据求出末端对每个杆件造成的速度，然后针对驱动，寻找它的速度差，就求出了速度雅可比，找出加速度差，就是cfi
+		// Need to derive velocities on each part caused by the end effector, then for the drive, find the velocity difference, this gives the velocity Jacobian, find the acceleration difference, which is cfi
 		aris::Size pos = 0;
 		for (auto &gm : model()->generalMotionPool()){
 			for (auto &mot : model()->motionPool()){
@@ -2496,7 +2496,7 @@ namespace aris::dynamic{
 	auto InverseKinematicSolver::cptJacobi()noexcept->void{
 		cptGeneralJacobi();
 
-		// 需要根据求出末端对每个杆件造成的速度，然后针对驱动，寻找它的速度差，就求出了速度雅可比
+		// Need to derive velocities on each part caused by the end effector, then for the drive, find the velocity difference, this gives the velocity Jacobian
 		aris::Size pos = 0;
 		for (auto &gm : model()->generalMotionPool()){
 			for (auto &mot : model()->motionPool()){
@@ -2508,8 +2508,8 @@ namespace aris::dynamic{
 					s_inv_tv(*mot.makI()->pm(), tem, tem2);
 					imp_->J_[at(mot.id(), pos + i, nJi())] = tem2[mot.axis()];
 
-					// 以下求ci //
-					// 这一段相当于updMv //
+					// Solve ci below //
+					// This section is equivalent to updMv //
 					mot.makI()->getVs(*mot.makJ(), tem);
 					double dq = tem[mot.axis()];
 					s_cv(mot.makJ()->vs(), mot.makI()->vs(), tem2);
